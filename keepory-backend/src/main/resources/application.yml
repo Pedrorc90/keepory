@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: keepory-backend
+  datasource:
+    url: jdbc:postgresql://localhost:5432/keepory
+    username: keepory
+    password: keepory
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+server:
+  port: 8080
