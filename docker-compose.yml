@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: keepory-postgres
+    environment:
+      POSTGRES_DB: keepory
+      POSTGRES_USER: keepory
+      POSTGRES_PASSWORD: keepory
+    ports:
+      - "5432:5432"
+    volumes:
+      - keepory_pgdata:/var/lib/postgresql/data
+
+volumes:
+  keepory_pgdata:
