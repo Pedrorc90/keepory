@@ -12,11 +12,14 @@ export interface Item {
   completedAt: string | null;
   notes: string | null;
   attributes: Record<string, unknown>;
+  source: string | null;
+  externalId: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface ItemRequest {
+  id?: string;
   type: ItemType;
   title: string;
   coverUrl: string | null;
@@ -25,6 +28,8 @@ export interface ItemRequest {
   completedAt: string | null;
   notes: string | null;
   attributes: Record<string, unknown>;
+  source: string | null;
+  externalId: string | null;
 }
 
 export interface Page<T> {
@@ -52,6 +57,30 @@ export const STATUS_SPINE_CLASSES: Record<ItemStatus, string> = {
   IN_PROGRESS: 'bg-amber',
   COMPLETED: 'bg-moss',
   DROPPED: 'bg-rust',
+};
+
+export interface AttributeField {
+  key: string;
+  label: string;
+  kind: 'text' | 'number' | 'list';
+}
+
+export const ATTRIBUTE_FIELDS: Record<ItemType, AttributeField[]> = {
+  MOVIE: [
+    { key: 'director', label: 'Dirección', kind: 'text' },
+    { key: 'year', label: 'Año', kind: 'number' },
+    { key: 'durationMinutes', label: 'Duración (min)', kind: 'number' },
+    { key: 'genres', label: 'Géneros (separados por comas)', kind: 'list' },
+    { key: 'originalTitle', label: 'Título original', kind: 'text' },
+  ],
+  BOOK: [
+    { key: 'authors', label: 'Autores (separados por comas)', kind: 'list' },
+    { key: 'year', label: 'Año', kind: 'number' },
+    { key: 'pageCount', label: 'Páginas', kind: 'number' },
+    { key: 'publisher', label: 'Editorial', kind: 'text' },
+    { key: 'isbn', label: 'ISBN', kind: 'text' },
+    { key: 'categories', label: 'Categorías (separadas por comas)', kind: 'list' },
+  ],
 };
 
 export const ITEM_TYPES = Object.keys(TYPE_LABELS) as ItemType[];

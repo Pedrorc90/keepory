@@ -4,6 +4,8 @@ import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angula
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ItemApi } from './item-api';
 import {
+  ATTRIBUTE_FIELDS,
+  AttributeField,
   ITEM_STATUSES,
   ITEM_TYPES,
   ItemRequest,
@@ -12,6 +14,8 @@ import {
   STATUS_LABELS,
   TYPE_LABELS,
 } from './item.model';
+import { MetadataApi } from './metadata-api';
+import { MetadataSearchResult } from './metadata.model';
 
 @Component({
   selector: 'app-item-form',
@@ -47,6 +51,57 @@ import {
                   }
                 </select>
               </label>
+            </div>
+
+            <div class="grid gap-1.5 text-sm">
+              <span class="text-muted">Buscar metadata</span>
+              <div class="flex gap-2">
+                <input
+                  [formControl]="searchControl"
+                  (keydown.enter)="$event.preventDefault(); search()"
+                  placeholder="Busca en TMDB / Google Books…"
+                  class="min-w-0 flex-1 rounded-md border border-line bg-panel px-3 py-2 placeholder:text-muted focus:border-amber focus:outline-none"
+                />
+                <button
+                  type="button"
+                  (click)="search()"
+                  [disabled]="searching()"
+                  class="rounded-md border border-line px-4 py-2 text-sm transition enabled:hover:border-amber disabled:opacity-60"
+                >
+                  {{ searching() ? 'Buscando…' : 'Buscar' }}
+                </button>
+              </div>
+              @if (searchError()) {
+                <span class="text-xs text-rust">{{ searchError() }}</span>
+              }
+              @if (searchResults(); as results) {
+                <ul class="mt-1 overflow-hidden rounded-md border border-line bg-panel">
+                  @if (results.length === 0) {
+                    <li class="px-3 py-2 text-xs text-muted">Sin resultados.</li>
+                  }
+                  @for (r of results; track r.externalId) {
+                    <li class="border-b border-line last:border-b-0">
+                      <button
+                        type="button"
+                        (click)="pick(r)"
+                        class="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-ink/40"
+                      >
+                        <span class="block h-12 w-8 shrink-0 overflow-hidden rounded-sm bg-ink">
+                          @if (r.coverUrl) {
+                            <img [src]="r.coverUrl" alt="" class="h-full w-full object-cover" loading="lazy" />
+                          }
+                        </span>
+                        <span class="min-w-0">
+                          <span class="block truncate">{{ r.title }}@if (r.year) { <span class="text-muted">({{ r.year }})</span> }</span>
+                          @if (r.description) {
+                            <span class="block truncate text-xs text-muted">{{ r.description }}</span>
+                          }
+                        </span>
+                      </button>
+                    </li>
+                  }
+                </ul>
+              }
             </div>
 
             <label class="grid gap-1.5 text-sm">
@@ -89,6 +144,19 @@ import {
                   class="rounded-md border border-line bg-panel px-3 py-2 focus:border-amber focus:outline-none"
                 />
               </label>
+            </div>
+
+            <div formGroupName="attrs" class="grid gap-4 sm:grid-cols-2">
+              @for (f of attributeFields(); track f.key) {
+                <label class="grid gap-1.5 text-sm">
+                  <span class="text-muted">{{ f.label }}</span>
+                  <input
+                    [formControlName]="f.key"
+                    [type]="f.kind === 'number' ? 'number' : 'text'"
+                    class="rounded-md border border-line bg-panel px-3 py-2 focus:border-amber focus:outline-none"
+                  />
+                </label>
+              }
             </div>
 
             <label class="grid gap-1.5 text-sm">
@@ -135,6 +203,7 @@ import {
 })
 export class ItemForm {
   private readonly api = inject(ItemApi);
+  private readonly metadata = inject(MetadataApi);
   private readonly router = inject(Router);
   private readonly fb = inject(NonNullableFormBuilder);
 
@@ -146,6 +215,8 @@ export class ItemForm {
   readonly statusLabels = STATUS_LABELS;
   readonly ratings = [1, 2, 3, 4, 5];
 
+  readonly attrsForm = this.fb.record<string>({});
+
   readonly form = this.fb.group({
     type: this.fb.control<ItemType>('MOVIE', Validators.required),
     title: ['', [Validators.required, Validators.maxLength(255)]],
@@ -154,7 +225,14 @@ export class ItemForm {
     rating: [''],
     completedAt: [''],
     notes: [''],
+    attrs: this.attrsForm,
   });
+
+  readonly searchControl = this.fb.control('');
+  readonly searching = signal(false);
+  readonly searchError = signal<string | null>(null);
+  readonly searchResults = signal<MetadataSearchResult[] | null>(null);
+  readonly attributeFields = signal<AttributeField[]>(ATTRIBUTE_FIELDS['MOVIE']);
 
   readonly coverPreview = toSignal(this.form.controls.coverUrl.valueChanges, { initialValue: '' });
   readonly submitted = signal(false);
@@ -162,10 +240,16 @@ export class ItemForm {
   readonly saveError = signal<string | null>(null);
   readonly loadError = signal<string | null>(null);
 
-  // Attributes are not editable until phase 3; kept as-is so updates don't wipe them.
   private attributes: Record<string, unknown> = {};
+  private source: string | null = null;
+  private externalId: string | null = null;
 
   constructor() {
+    this.rebuildAttrs();
+    this.form.controls.type.valueChanges.subscribe(() => {
+      this.searchResults.set(null);
+      this.rebuildAttrs();
+    });
     if (this.id) this.loadItem(this.id);
   }
 
@@ -173,6 +257,8 @@ export class ItemForm {
     this.api.get(id).subscribe({
       next: (item) => {
         this.attributes = item.attributes ?? {};
+        this.source = item.source;
+        this.externalId = item.externalId;
         this.form.patchValue({
           type: item.type,
           title: item.title,
@@ -182,9 +268,87 @@ export class ItemForm {
           completedAt: item.completedAt ?? '',
           notes: item.notes ?? '',
         });
+        this.rebuildAttrs();
       },
       error: () => this.loadError.set('No se pudo cargar el elemento.'),
     });
+  }
+
+  search(): void {
+    const q = this.searchControl.value.trim() || this.form.controls.title.value.trim();
+    if (!q) return;
+    this.searching.set(true);
+    this.searchError.set(null);
+    this.metadata.search(this.form.controls.type.value, q).subscribe({
+      next: (results) => {
+        this.searchResults.set(results);
+        this.searching.set(false);
+      },
+      error: () => {
+        this.searchError.set('No se pudo buscar. ¿Está configurada la API key del proveedor?');
+        this.searching.set(false);
+      },
+    });
+  }
+
+  pick(result: MetadataSearchResult): void {
+    this.searching.set(true);
+    this.searchError.set(null);
+    this.metadata.detail(this.form.controls.type.value, result.externalId).subscribe({
+      next: (detail) => {
+        this.attributes = detail.attributes ?? {};
+        this.source = detail.source;
+        this.externalId = detail.externalId;
+        this.form.patchValue({ title: detail.title, coverUrl: detail.coverUrl ?? '' });
+        this.rebuildAttrs();
+        this.searchResults.set(null);
+        this.searching.set(false);
+      },
+      error: () => {
+        this.searchError.set('No se pudo cargar el detalle del resultado.');
+        this.searching.set(false);
+      },
+    });
+  }
+
+  private rebuildAttrs(): void {
+    const fields = ATTRIBUTE_FIELDS[this.form.controls.type.value];
+    this.attributeFields.set(fields);
+    const attrs = this.attrsForm;
+    for (const key of Object.keys(attrs.controls)) {
+      attrs.removeControl(key, { emitEvent: false });
+    }
+    for (const field of fields) {
+      const value = this.attributes[field.key];
+      const text =
+        field.kind === 'list' && Array.isArray(value)
+          ? value.join(', ')
+          : value != null
+            ? String(value)
+            : '';
+      attrs.addControl(field.key, this.fb.control(text), { emitEvent: false });
+    }
+  }
+
+  private serializeAttributes(): Record<string, unknown> {
+    const out = { ...this.attributes };
+    const attrs = this.attrsForm.getRawValue();
+    for (const field of this.attributeFields()) {
+      const raw = (attrs[field.key] ?? '').trim();
+      if (!raw) {
+        delete out[field.key];
+        continue;
+      }
+      if (field.kind === 'number') {
+        const n = Number(raw);
+        out[field.key] = Number.isNaN(n) ? raw : n;
+      } else if (field.kind === 'list') {
+        out[field.key] = raw.split(',').map((s) => s.trim()).filter(Boolean);
+      } else {
+        out[field.key] = raw;
+      }
+    }
+    return out;
   }
 
   starLabel(rating: number): string {
@@ -197,6 +361,8 @@ export class ItemForm {
 
     const value = this.form.getRawValue();
     const request: ItemRequest = {
+      // Client-generated id so offline-created items keep the same identity after sync (F6).
+      id: this.id ?? crypto.randomUUID(),
       type: value.type,
       title: value.title.trim(),
       coverUrl: value.coverUrl.trim() || null,
@@ -204,7 +370,9 @@ export class ItemForm {
       rating: value.rating ? Number(value.rating) : null,
       completedAt: value.completedAt || null,
       notes: value.notes.trim() || null,
-      attributes: this.attributes,
+      attributes: this.serializeAttributes(),
+      source: this.source,
+      externalId: this.externalId,
     };
 
     this.saving.set(true);
