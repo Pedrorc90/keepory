@@ -3,6 +3,7 @@ package com.keepory.metadata;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.keepory.metadata.dto.MetadataDetail;
 import com.keepory.metadata.dto.MetadataSearchResult;
+import com.keepory.suggestion.dto.MovieSuggestion;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -71,6 +72,21 @@ public class TmdbClient {
                 cover(m.posterPath()), attributes);
     }
 
+    public List<MovieSuggestion> recommendations(String externalId) {
+        RecommendationsResponse response = get(uri -> uri.path("/movie/{id}/recommendations")
+                .queryParam("language", LANGUAGE)
+                .queryParam("api_key", apiKey)
+                .build(externalId), RecommendationsResponse.class);
+        if (response == null || response.results() == null) {
+            return List.of();
+        }
+        return response.results().stream()
+                .filter(m -> m.title() != null)
+                .map(m -> new MovieSuggestion(SOURCE, String.valueOf(m.id()), m.title(),
+                        year(m.releaseDate()), cover(m.posterPath()), m.overview(), m.voteAverage()))
+                .toList();
+    }
+
     private <T> T get(Function<UriBuilder, URI> uri, Class<T> type) {
         if (apiKey == null || apiKey.isBlank()) {
             throw new MetadataProviderException("TMDB_API_KEY is not configured");
@@ -132,6 +148,17 @@ public class TmdbClient {
                                Integer runtime,
                                List<Genre> genres,
                                Credits credits) {
+    }
+
+    private record RecommendationsResponse(List<RecommendedMovie> results) {
+    }
+
+    private record RecommendedMovie(long id,
+                                    String title,
+                                    @JsonProperty("release_date") String releaseDate,
+                                    @JsonProperty("poster_path") String posterPath,
+                                    String overview,
+                                    @JsonProperty("vote_average") Double voteAverage) {
     }
 
     private record Genre(String name) {
