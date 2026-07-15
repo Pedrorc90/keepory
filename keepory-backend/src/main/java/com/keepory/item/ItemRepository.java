@@ -6,13 +6,17 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ItemRepository extends JpaRepository<Item, UUID> {
 
+    Optional<Item> findByIdAndDeletedAtIsNull(UUID id);
+
     @Query("""
             select i from Item i
-            where (:type is null or i.type = :type)
+            where i.deletedAt is null
+              and (:type is null or i.type = :type)
               and (:status is null or i.status = :status)
               and (:q = '' or lower(i.title) like lower(concat('%', :q, '%')))
             """)

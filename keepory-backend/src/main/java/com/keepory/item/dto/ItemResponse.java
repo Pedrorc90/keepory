@@ -19,6 +19,8 @@ public record ItemResponse(
         LocalDate completedAt,
         String notes,
         Map<String, Object> attributes,
+        String source,
+        String externalId,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt) {
 
@@ -33,6 +35,8 @@ public record ItemResponse(
                 item.getCompletedAt(),
                 item.getNotes(),
                 item.getAttributes(),
+                item.getSource(),
+                item.getExternalId(),
                 item.getCreatedAt(),
                 item.getUpdatedAt());
     }

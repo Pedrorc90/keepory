@@ -2,12 +2,14 @@ package com.keepory.item;
 
 import com.keepory.item.dto.ItemRequest;
 import com.keepory.item.dto.ItemResponse;
+import jakarta.persistence.EntityExistsException;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.UUID;
 
@@ -33,23 +35,32 @@ public class ItemService {
     }
 
     public ItemResponse create(ItemRequest request) {
+        UUID id = request.id() != null ? request.id() : UUID.randomUUID();
+        if (repository.existsById(id)) {
+            throw new EntityExistsException("Item %s already exists".formatted(id));
+        }
         Item item = new Item();
+        item.setId(id);
         apply(item, request);
-        return ItemResponse.from(repository.save(item));
+        // Flush so Hibernate populates createdAt/updatedAt before building the response.
+        return ItemResponse.from(repository.saveAndFlush(item));
     }
 
     public ItemResponse update(UUID id, ItemRequest request) {
         Item item = find(id);
         apply(item, request);
+        // Flush so updatedAt reflects this change in the response.
+        repository.flush();
         return ItemResponse.from(item);
     }
 
     public void delete(UUID id) {
-        repository.delete(find(id));
+        // Soft delete: keeps a tombstone so offline clients can sync the removal.
+        find(id).setDeletedAt(OffsetDateTime.now());
     }
 
     private Item find(UUID id) {
-        return repository.findById(id)
+        return repository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new EntityNotFoundException("Item %s not found".formatted(id)));
     }
 
@@ -62,5 +73,7 @@ public class ItemService {
         item.setCompletedAt(request.completedAt());
         item.setNotes(request.notes());
         item.setAttributes(request.attributes() != null ? request.attributes() : new HashMap<>());
+        item.setSource(request.source());
+        item.setExternalId(request.externalId());
     }
 }
