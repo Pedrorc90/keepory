@@ -8,8 +8,8 @@ Fuente de verdad del plan por fases. Claude lo lee al inicio de sesión y lo act
 - [x] **F1 — CRUD API** (2026-07-14): item CRUD, búsqueda, paging, Flyway
 - [x] **F2 — Panel Angular** (2026-07-14): grid de tarjetas con carátula, filtros tipo/estado/búsqueda, form alta/edición, tema oscuro "biblioteca de noche"
 - [ ] **F3 — Metadata externa** (en curso, ver desglose abajo)
-- [ ] **F4 — Sugerencias** (alcance definido 2026-07-15: solo descubrimiento externo de películas en esta fase)
-  - [x] **F4.1 — Descubrimiento de pelis** (2026-07-15): pantalla `/suggestions` tipo baraja — cover + título/año/nota TMDB/sinopsis y acciones Pendiente / Ya la he visto / Descartar. Backend `GET /api/suggestions/movies` (semilla: hasta 5 completadas al azar → TMDB recommendations, excluye colección y descartes) y `POST /api/suggestions/dismiss` (tabla `suggestion_dismissal`, migración V3). Pendiente: prueba manual.
+- [x] **F4 — Sugerencias** (cerrada 2026-07-15; alcance: solo descubrimiento externo de películas en esta fase)
+  - [x] **F4.1 — Descubrimiento de pelis** (2026-07-15, probada OK): pantalla `/suggestions` tipo baraja — cover + título/año/nota TMDB/sinopsis y acciones Pendiente / Ya la he visto / Descartar. Backend `GET /api/suggestions/movies` (semilla: hasta 5 completadas al azar → TMDB recommendations, excluye colección y descartes) y `POST /api/suggestions/dismiss` (tabla `suggestion_dismissal`, migración V3).
   - Ideas aplazadas: sugerencias desde la propia colección ("qué ver ahora"), libros (bloqueado por Google Books), redescubrimiento/estadísticas.
 - [ ] **F5 — Auth + deploy**
 - [ ] **F6 — Offline móvil** (Capacitor; offline-first, sync pull/push incremental por `updatedAt`, last-write-wins)
