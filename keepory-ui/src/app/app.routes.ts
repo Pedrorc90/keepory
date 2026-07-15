@@ -5,5 +5,6 @@ export const routes: Routes = [
   { path: 'items', loadComponent: () => import('./items/item-list').then((m) => m.ItemList) },
   { path: 'items/new', loadComponent: () => import('./items/item-form').then((m) => m.ItemForm) },
   { path: 'items/:id/edit', loadComponent: () => import('./items/item-form').then((m) => m.ItemForm) },
+  { path: 'suggestions', loadComponent: () => import('./suggestions/suggestions').then((m) => m.Suggestions) },
   { path: '**', redirectTo: 'items' },
 ];
