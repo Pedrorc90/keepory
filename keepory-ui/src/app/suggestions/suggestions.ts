@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, signal } from '@angular/core';
 import { switchMap } from 'rxjs';
 import { ItemApi } from '../items/item-api';
@@ -20,7 +21,7 @@ import { MovieSuggestion, SuggestionApi } from './suggestion-api';
           <button type="button" (click)="load()" class="mt-4 text-sm underline">Reintentar</button>
         </div>
       } @else if (current(); as s) {
-        <article class="mt-6">
+        <article class="mt-6" [class]="cardClass()" (animationend)="onAnimationEnd()">
           <div class="mx-auto aspect-2/3 w-56 overflow-hidden rounded-lg bg-panel ring-1 ring-line shadow-lg">
             @if (s.coverUrl) {
               <img [src]="s.coverUrl" [alt]="s.title" class="h-full w-full object-cover" />
@@ -101,8 +102,19 @@ export class Suggestions {
   readonly loadError = signal<string | null>(null);
   readonly actionError = signal<string | null>(null);
 
+  private readonly animation = signal<'left' | 'right' | 'up' | 'enter' | null>(null);
+
   readonly current = computed(() => this.suggestions()[this.index()] ?? null);
   readonly remaining = computed(() => this.suggestions().length - this.index());
+  readonly cardClass = computed(() => {
+    switch (this.animation()) {
+      case 'left': return 'card-leave-left';
+      case 'right': return 'card-leave-right';
+      case 'up': return 'card-leave-up';
+      case 'enter': return 'card-enter';
+      default: return '';
+    }
+  });
 
   constructor() {
     this.load();
@@ -147,9 +159,13 @@ export class Suggestions {
         ),
       )
       .subscribe({
-        next: () => this.advance(),
-        error: () => {
-          this.actionError.set('No se pudo añadir a la colección.');
+        next: () => this.leave(status === 'COMPLETED' ? 'right' : 'up'),
+        error: (err: HttpErrorResponse) => {
+          this.actionError.set(
+            err.status === 409
+              ? 'Esta película ya está en tu colección.'
+              : 'No se pudo añadir a la colección.',
+          );
           this.busy.set(false);
         },
       });
@@ -159,7 +175,7 @@ export class Suggestions {
     this.busy.set(true);
     this.actionError.set(null);
     this.suggestionApi.dismiss(suggestion).subscribe({
-      next: () => this.advance(),
+      next: () => this.leave('left'),
       error: () => {
         this.actionError.set('No se pudo descartar la sugerencia.');
         this.busy.set(false);
@@ -167,8 +183,18 @@ export class Suggestions {
     });
   }
 
-  private advance(): void {
-    this.index.update((i) => i + 1);
-    this.busy.set(false);
+  onAnimationEnd(): void {
+    const animation = this.animation();
+    if (animation && animation !== 'enter') {
+      this.index.update((i) => i + 1);
+      this.busy.set(false);
+      this.animation.set(this.current() ? 'enter' : null);
+    } else {
+      this.animation.set(null);
+    }
+  }
+
+  private leave(direction: 'left' | 'right' | 'up'): void {
+    this.animation.set(direction);
   }
 }

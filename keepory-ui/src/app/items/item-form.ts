@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -380,8 +381,12 @@ export class ItemForm {
     const call = this.id ? this.api.update(this.id, request) : this.api.create(request);
     call.subscribe({
       next: () => this.router.navigate(['/items']),
-      error: () => {
-        this.saveError.set('No se pudo guardar. Revisa los datos e inténtalo de nuevo.');
+      error: (err: HttpErrorResponse) => {
+        this.saveError.set(
+          err.status === 409
+            ? 'Este elemento ya está en tu colección.'
+            : 'No se pudo guardar. Revisa los datos e inténtalo de nuevo.',
+        );
         this.saving.set(false);
       },
     });

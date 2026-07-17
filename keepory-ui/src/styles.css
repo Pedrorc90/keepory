@@ -23,3 +23,24 @@ body {
   color: var(--color-paper);
   font-family: var(--font-sans);
 }
+
+@keyframes card-out-left {
+  to { transform: perspective(800px) translateX(-130%) rotate(-18deg) rotateY(-35deg); opacity: 0; }
+}
+
+@keyframes card-out-right {
+  to { transform: perspective(800px) translateX(130%) rotate(18deg) rotateY(35deg); opacity: 0; }
+}
+
+@keyframes card-out-up {
+  to { transform: perspective(800px) translateY(-45%) rotateX(30deg); opacity: 0; }
+}
+
+@keyframes card-in {
+  from { transform: perspective(800px) translateY(14px) rotateX(8deg) scale(0.96); opacity: 0; }
+}
+
+.card-leave-left { animation: card-out-left 0.24s ease-in forwards; }
+.card-leave-right { animation: card-out-right 0.24s ease-in forwards; }
+.card-leave-up { animation: card-out-up 0.24s ease-in forwards; }
+.card-enter { animation: card-in 0.2s ease-out; }
