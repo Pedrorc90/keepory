@@ -16,6 +16,8 @@ public interface ItemRepository extends JpaRepository<Item, UUID> {
 
     List<Item> findByTypeAndSourceAndDeletedAtIsNull(ItemType type, String source);
 
+    boolean existsByTypeAndSourceAndExternalIdAndDeletedAtIsNull(ItemType type, String source, String externalId);
+
     @Query("""
             select i from Item i
             where i.deletedAt is null

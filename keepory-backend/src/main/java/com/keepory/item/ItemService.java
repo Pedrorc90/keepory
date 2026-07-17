@@ -39,6 +39,12 @@ public class ItemService {
         if (repository.existsById(id)) {
             throw new EntityExistsException("Item %s already exists".formatted(id));
         }
+        if (request.source() != null && request.externalId() != null
+                && repository.existsByTypeAndSourceAndExternalIdAndDeletedAtIsNull(
+                        request.type(), request.source(), request.externalId())) {
+            throw new EntityExistsException(
+                    "Item from %s with external id %s already exists".formatted(request.source(), request.externalId()));
+        }
         Item item = new Item();
         item.setId(id);
         apply(item, request);
