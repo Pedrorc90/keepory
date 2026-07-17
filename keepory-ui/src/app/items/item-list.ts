@@ -3,14 +3,12 @@ import { RouterLink } from '@angular/router';
 import { ItemApi } from './item-api';
 import {
   ITEM_STATUSES,
-  ITEM_TYPES,
   Item,
   ItemStatus,
   ItemType,
   Page,
   STATUS_LABELS,
   STATUS_SPINE_CLASSES,
-  TYPE_LABELS,
 } from './item.model';
 
 @Component({
@@ -30,29 +28,55 @@ import {
       </a>
     </div>
 
-    <div class="mt-5 flex flex-wrap items-center gap-2">
-      <select
-        [value]="type()"
-        (change)="filterByType($any($event.target).value)"
-        class="rounded-md border border-line bg-panel px-3 py-2 text-sm focus:border-amber focus:outline-none"
-        aria-label="Filtrar por tipo"
-      >
-        <option value="">Todo</option>
-        @for (t of types; track t) {
-          <option [value]="t">{{ typeLabels[t] }}s</option>
-        }
-      </select>
-      <select
-        [value]="status()"
-        (change)="filterByStatus($any($event.target).value)"
-        class="rounded-md border border-line bg-panel px-3 py-2 text-sm focus:border-amber focus:outline-none"
-        aria-label="Filtrar por estado"
-      >
-        <option value="">Cualquier estado</option>
-        @for (s of statuses; track s) {
-          <option [value]="s">{{ statusLabels[s] }}</option>
-        }
-      </select>
+    <div class="mt-7 items-start gap-8 md:flex">
+      <aside class="md:w-64 md:shrink-0">
+        <nav class="flex items-start gap-3 md:grid md:grid-cols-2 md:gap-3" aria-label="Filtrar por tipo">
+          @for (card of typeCards; track card.label) {
+            <button
+              (click)="filterByType(card.value)"
+              [attr.aria-pressed]="type() === card.value"
+              class="relative block w-full flex-1 overflow-hidden rounded-md bg-panel text-left shadow-lg shadow-black/40 ring-1 transition duration-200 focus-visible:outline-none md:flex-none"
+              [class]="
+                card.stagger +
+                (type() === card.value
+                  ? ' z-10 -translate-y-1 ring-amber'
+                  : ' ring-line hover:z-10 hover:-translate-y-1 hover:ring-amber/60')
+              "
+            >
+              <span class="block h-1.5" [class]="card.band"></span>
+              <span class="block px-3 pb-10 pt-3 font-display text-base md:aspect-2/3 md:pb-0 md:text-xl">
+                {{ card.label }}
+              </span>
+            </button>
+          }
+        </nav>
+      </aside>
+
+      <aside class="mt-7 md:order-last md:mt-0 md:w-36 md:shrink-0">
+        <p class="mb-2 hidden text-xs uppercase tracking-wide text-muted md:block">Estado</p>
+        <nav class="flex flex-wrap gap-2 md:flex-col md:items-start" aria-label="Filtrar por estado">
+          @for (bubble of statusBubbles; track bubble.label) {
+            <button
+              (click)="filterByStatus(bubble.value)"
+              [attr.aria-pressed]="status() === bubble.value"
+              class="flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition focus-visible:outline-none"
+              [class]="
+                status() === bubble.value
+                  ? 'border-amber bg-amber/15 text-paper'
+                  : 'border-line text-muted hover:border-amber/60 hover:text-paper'
+              "
+            >
+              @if (bubble.value) {
+                <span class="h-2 w-2 rounded-full" [class]="spineClasses[bubble.value]"></span>
+              }
+              {{ bubble.label }}
+            </button>
+          }
+        </nav>
+      </aside>
+
+      <div class="mt-7 min-w-0 flex-1 md:mt-0">
+    <div class="flex flex-wrap items-center gap-2">
       <input
         type="search"
         [value]="q()"
@@ -80,7 +104,7 @@ import {
           </p>
         </div>
       } @else {
-        <ul class="mt-7 grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        <ul class="mt-7 grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
           @for (item of page.content; track item.id) {
             <li class="group">
               <a [routerLink]="['/items', item.id, 'edit']" class="block">
@@ -95,16 +119,33 @@ import {
                     </div>
                   }
                   <span class="absolute inset-x-0 bottom-0 h-1.5" [class]="spineClasses[item.status]"></span>
+                  @if (item.type === 'MOVIE') {
+                    <svg class="absolute right-2 top-0 h-10 w-4 text-rust drop-shadow-md" viewBox="0 0 16 40" aria-hidden="true">
+                      <rect width="16" height="40" fill="currentColor" />
+                      <g fill="rgba(0, 0, 0, 0.45)">
+                        <rect x="2.5" y="3" width="3" height="4.5" rx="1" />
+                        <rect x="2.5" y="11" width="3" height="4.5" rx="1" />
+                        <rect x="2.5" y="19" width="3" height="4.5" rx="1" />
+                        <rect x="2.5" y="27" width="3" height="4.5" rx="1" />
+                        <rect x="10.5" y="3" width="3" height="4.5" rx="1" />
+                        <rect x="10.5" y="11" width="3" height="4.5" rx="1" />
+                        <rect x="10.5" y="19" width="3" height="4.5" rx="1" />
+                        <rect x="10.5" y="27" width="3" height="4.5" rx="1" />
+                      </g>
+                    </svg>
+                  } @else if (item.type === 'BOOK') {
+                    <svg class="absolute right-2 top-0 h-10 w-4 text-moss drop-shadow-md" viewBox="0 0 16 40" aria-hidden="true">
+                      <path d="M0 0h16v40l-8-7-8 7z" fill="currentColor" />
+                    </svg>
+                  }
                 </div>
               </a>
               <div class="mt-2 flex items-start justify-between gap-2">
                 <div class="min-w-0">
-                  <p class="truncate text-sm" [title]="item.title">{{ item.title }}</p>
-                  <p class="text-xs text-muted">
-                    {{ typeLabels[item.type] }} · {{ statusLabels[item.status] }}@if (item.rating) {
-                      · <span class="text-amber">{{ stars(item.rating) }}</span>
-                    }
-                  </p>
+                  <p class="text-sm">{{ item.title }}</p>
+                  @if (item.rating) {
+                    <p class="text-xs text-amber">{{ stars(item.rating) }}</p>
+                  }
                 </div>
                 <button
                   (click)="remove(item)"
@@ -139,15 +180,22 @@ import {
         }
       }
     }
+      </div>
+    </div>
   `,
 })
 export class ItemList {
   private readonly api = inject(ItemApi);
 
-  readonly types = ITEM_TYPES;
-  readonly statuses = ITEM_STATUSES;
-  readonly typeLabels = TYPE_LABELS;
-  readonly statusLabels = STATUS_LABELS;
+  readonly typeCards: { value: ItemType | ''; label: string; band: string; stagger: string }[] = [
+    { value: '', label: 'Todo', band: 'bg-amber', stagger: 'md:col-start-1 md:row-start-1 md:row-span-2' },
+    { value: 'MOVIE', label: 'Películas', band: 'bg-rust', stagger: 'mt-3 md:mt-0 md:col-start-2 md:row-start-2 md:row-span-2' },
+    { value: 'BOOK', label: 'Libros', band: 'bg-moss', stagger: 'mt-6 md:mt-0 md:col-start-1 md:row-start-3 md:row-span-2' },
+  ];
+  readonly statusBubbles: { value: ItemStatus | ''; label: string }[] = [
+    { value: '', label: 'Todos' },
+    ...ITEM_STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] })),
+  ];
   readonly spineClasses = STATUS_SPINE_CLASSES;
 
   readonly type = signal<ItemType | ''>('');

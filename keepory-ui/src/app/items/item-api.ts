@@ -19,7 +19,7 @@ export class ItemApi {
   list(filters: ItemFilters = {}): Observable<Page<Item>> {
     let params = new HttpParams()
       .set('page', filters.page ?? 0)
-      .set('size', filters.size ?? 20);
+      .set('size', filters.size ?? 35);
     if (filters.type) params = params.set('type', filters.type);
     if (filters.status) params = params.set('status', filters.status);
     if (filters.q) params = params.set('q', filters.q);
