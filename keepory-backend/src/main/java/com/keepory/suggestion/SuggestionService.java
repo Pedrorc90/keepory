@@ -8,6 +8,7 @@ import com.keepory.metadata.TmdbClient;
 import com.keepory.suggestion.dto.MovieSuggestion;
 import org.springframework.stereotype.Service;
 
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -24,6 +25,7 @@ public class SuggestionService {
 
     private static final int MAX_SEEDS = 5;
     private static final int MAX_RESULTS = 20;
+    private static final int DISMISSAL_COOLDOWN_DAYS = 30;
 
     private final ItemRepository items;
     private final SuggestionDismissalRepository dismissals;
@@ -41,7 +43,9 @@ public class SuggestionService {
                 .map(Item::getExternalId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        Set<String> dismissed = dismissals.findBySource(TmdbClient.SOURCE).stream()
+        // Dismissals expire after a cooldown so discarded suggestions can resurface.
+        OffsetDateTime cutoff = OffsetDateTime.now().minusDays(DISMISSAL_COOLDOWN_DAYS);
+        Set<String> dismissed = dismissals.findBySourceAndDismissedAtAfter(TmdbClient.SOURCE, cutoff).stream()
                 .map(SuggestionDismissal::getExternalId)
                 .collect(Collectors.toSet());
 
