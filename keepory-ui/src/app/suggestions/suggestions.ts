@@ -1,17 +1,40 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, signal } from '@angular/core';
-import { switchMap } from 'rxjs';
-import { ItemApi } from '../items/item-api';
-import { ItemStatus } from '../items/item.model';
-import { MetadataApi } from '../items/metadata-api';
-import { MovieSuggestion, SuggestionApi } from './suggestion-api';
+import { map } from 'rxjs';
+import { ItemType } from '../items/item.model';
+import { Suggestion, SuggestionApi, SuggestionDeck } from './suggestion-api';
+import { SuggestionRow } from './suggestion-row';
+
+interface SuggestionTexts {
+  tagline: string;
+  completed: string;
+  duplicate: string;
+  emptyHint: string;
+  loadError: string;
+}
 
 @Component({
   selector: 'app-suggestions',
+  imports: [SuggestionRow],
   template: `
-    <div class="mx-auto max-w-sm">
+    <div>
       <h1 class="text-center font-display text-3xl font-semibold">Sugerencias</h1>
-      <p class="mt-1 text-center text-sm text-muted">Películas afines a lo que ya has visto.</p>
+      <p class="mt-1 text-center text-sm text-muted">{{ labels().tagline }}</p>
+
+      <div class="mt-4 flex justify-center gap-2">
+        @for (t of types; track t) {
+          <button
+            type="button"
+            (click)="setType(t)"
+            [class]="
+              type() === t
+                ? 'rounded-full border border-amber bg-amber/15 px-4 py-1.5 text-sm text-paper'
+                : 'rounded-full border border-line px-4 py-1.5 text-sm text-muted transition hover:border-amber/60 hover:text-paper'
+            "
+          >
+            {{ typeTabs[t] }}
+          </button>
+        }
+      </div>
 
       @if (loading()) {
         <p class="mt-12 text-center text-sm text-muted">Buscando sugerencias…</p>
@@ -20,68 +43,44 @@ import { MovieSuggestion, SuggestionApi } from './suggestion-api';
           <p class="rounded-md border border-rust/50 bg-rust/10 px-4 py-3 text-sm">{{ loadError() }}</p>
           <button type="button" (click)="load()" class="mt-4 text-sm underline">Reintentar</button>
         </div>
-      } @else if (current(); as s) {
-        <article class="mt-6" [class]="cardClass()" (animationend)="onAnimationEnd()">
-          <div class="mx-auto aspect-2/3 w-56 overflow-hidden rounded-lg bg-panel ring-1 ring-line shadow-lg">
-            @if (s.coverUrl) {
-              <img [src]="s.coverUrl" [alt]="s.title" class="h-full w-full object-cover" />
-            } @else {
-              <div class="flex h-full items-center justify-center p-4 text-center text-xs text-muted">
-                Sin carátula
+      } @else if (sections().length) {
+        @if (refreshError()) {
+          <p class="mx-auto mt-4 w-fit rounded-md border border-rust/50 bg-rust/10 px-4 py-2 text-sm">
+            {{ refreshError() }}
+          </p>
+        }
+        <div class="mx-auto mt-8 w-fit space-y-8">
+          @for (section of sections(); track section.id) {
+            <section>
+              <div class="flex items-center gap-2">
+                <h2 class="font-display text-lg font-semibold text-amber">{{ section.title }}</h2>
+                <button
+                  type="button"
+                  (click)="refreshSection(section.id)"
+                  [disabled]="refreshingId() !== null"
+                  title="Refrescar fila"
+                  aria-label="Refrescar fila"
+                  class="text-lg leading-none text-muted transition enabled:hover:text-amber disabled:opacity-50"
+                  [class.animate-spin]="refreshingId() === section.id"
+                >
+                  ↻
+                </button>
               </div>
-            }
-          </div>
-
-          <div class="mt-4 text-center">
-            <h2 class="font-display text-xl font-semibold">{{ s.title }}</h2>
-            <p class="mt-1 text-sm text-muted">
-              @if (s.year) { {{ s.year }} }
-              @if (s.voteAverage) { · ★ {{ s.voteAverage.toFixed(1) }} }
-            </p>
-            @if (s.overview) {
-              <p class="mt-2 line-clamp-4 text-sm text-muted">{{ s.overview }}</p>
-            }
-          </div>
-
-          @if (actionError()) {
-            <p class="mt-4 rounded-md border border-rust/50 bg-rust/10 px-4 py-2 text-center text-sm">
-              {{ actionError() }}
-            </p>
+              <app-suggestion-row
+                class="mt-3 block"
+                [suggestions]="section.suggestions"
+                [type]="type()"
+                [completedLabel]="labels().completed"
+                [duplicateMessage]="labels().duplicate"
+                (reload)="refreshSection(section.id)"
+              />
+            </section>
           }
-
-          <div class="mt-5 flex items-center justify-center gap-3">
-            <button
-              type="button"
-              (click)="discard(s)"
-              [disabled]="busy()"
-              class="rounded-md border border-line px-4 py-2 text-sm text-muted transition enabled:hover:border-rust enabled:hover:text-rust disabled:opacity-60"
-            >
-              Descartar
-            </button>
-            <button
-              type="button"
-              (click)="add(s, 'PENDING')"
-              [disabled]="busy()"
-              class="rounded-md border border-amber px-4 py-2 text-sm text-amber transition enabled:hover:bg-amber enabled:hover:text-ink disabled:opacity-60"
-            >
-              Pendiente
-            </button>
-            <button
-              type="button"
-              (click)="add(s, 'COMPLETED')"
-              [disabled]="busy()"
-              class="rounded-md bg-moss px-4 py-2 text-sm font-medium text-ink transition enabled:hover:brightness-110 disabled:opacity-60"
-            >
-              Ya la he visto
-            </button>
-          </div>
-
-          <p class="mt-4 text-center text-xs text-muted">{{ remaining() }} sugerencias en la baraja</p>
-        </article>
+        </div>
       } @else {
         <div class="mt-12 text-center text-sm text-muted">
           <p>No hay más sugerencias por ahora.</p>
-          <p class="mt-1">Marca películas como completadas para afinar la baraja.</p>
+          <p class="mt-1">{{ labels().emptyHint }}</p>
           <button type="button" (click)="load()" class="mt-4 text-sm text-amber underline">
             Buscar de nuevo
           </button>
@@ -92,109 +91,93 @@ import { MovieSuggestion, SuggestionApi } from './suggestion-api';
 })
 export class Suggestions {
   private readonly suggestionApi = inject(SuggestionApi);
-  private readonly metadataApi = inject(MetadataApi);
-  private readonly itemApi = inject(ItemApi);
 
-  readonly suggestions = signal<MovieSuggestion[]>([]);
-  readonly index = signal(0);
+  readonly types: ItemType[] = ['MOVIE', 'BOOK'];
+  readonly typeTabs: Record<ItemType, string> = { MOVIE: 'Películas', BOOK: 'Libros' };
+  private readonly texts: Record<ItemType, SuggestionTexts> = {
+    MOVIE: {
+      tagline: 'Filas según lo que has visto, tus pendientes y tus géneros favoritos.',
+      completed: 'Vista',
+      duplicate: 'Esta película ya está en tu colección.',
+      emptyHint: 'Añade películas completadas o pendientes para afinar las sugerencias.',
+      loadError: 'No se pudieron cargar las sugerencias. ¿Está configurada la key de TMDB?',
+    },
+    BOOK: {
+      tagline: 'Libros afines a lo que ya has leído.',
+      completed: 'Leído',
+      duplicate: 'Este libro ya está en tu colección.',
+      emptyHint: 'Marca libros como completados para afinar las sugerencias.',
+      loadError: 'No se pudieron cargar las sugerencias. ¿Está configurada la key de Google Books?',
+    },
+  };
+
+  readonly type = signal<ItemType>('MOVIE');
+  readonly labels = computed(() => this.texts[this.type()]);
+  readonly sections = signal<SuggestionDeck[]>([]);
   readonly loading = signal(true);
-  readonly busy = signal(false);
   readonly loadError = signal<string | null>(null);
-  readonly actionError = signal<string | null>(null);
-
-  private readonly animation = signal<'left' | 'right' | 'up' | 'enter' | null>(null);
-
-  readonly current = computed(() => this.suggestions()[this.index()] ?? null);
-  readonly remaining = computed(() => this.suggestions().length - this.index());
-  readonly cardClass = computed(() => {
-    switch (this.animation()) {
-      case 'left': return 'card-leave-left';
-      case 'right': return 'card-leave-right';
-      case 'up': return 'card-leave-up';
-      case 'enter': return 'card-enter';
-      default: return '';
-    }
-  });
+  readonly refreshingId = signal<string | null>(null);
+  readonly refreshError = signal<string | null>(null);
 
   constructor() {
+    this.load();
+  }
+
+  setType(type: ItemType): void {
+    if (this.type() === type) {
+      return;
+    }
+    this.type.set(type);
     this.load();
   }
 
   load(): void {
     this.loading.set(true);
     this.loadError.set(null);
-    this.index.set(0);
-    this.suggestionApi.movies().subscribe({
-      next: (suggestions) => {
-        this.suggestions.set(suggestions);
-        this.loading.set(false);
-      },
-      error: () => {
-        this.loadError.set('No se pudieron cargar las sugerencias. ¿Está configurada la key de TMDB?');
-        this.loading.set(false);
-      },
-    });
-  }
-
-  add(suggestion: MovieSuggestion, status: ItemStatus): void {
-    this.busy.set(true);
-    this.actionError.set(null);
-    this.metadataApi
-      .detail('MOVIE', suggestion.externalId)
-      .pipe(
-        switchMap((detail) =>
-          this.itemApi.create({
-            id: crypto.randomUUID(),
-            type: 'MOVIE',
-            title: detail.title,
-            coverUrl: detail.coverUrl,
-            status,
-            rating: null,
-            completedAt: null,
-            notes: null,
-            attributes: detail.attributes ?? {},
-            source: detail.source,
-            externalId: detail.externalId,
-          }),
-        ),
-      )
-      .subscribe({
-        next: () => this.leave(status === 'COMPLETED' ? 'right' : 'up'),
-        error: (err: HttpErrorResponse) => {
-          this.actionError.set(
-            err.status === 409
-              ? 'Esta película ya está en tu colección.'
-              : 'No se pudo añadir a la colección.',
+    this.refreshError.set(null);
+    const sections$ =
+      this.type() === 'MOVIE'
+        ? this.suggestionApi.movieDecks()
+        : this.suggestionApi.books().pipe(
+            map((suggestions): SuggestionDeck[] =>
+              suggestions.length ? [this.bookSection(suggestions)] : [],
+            ),
           );
-          this.busy.set(false);
-        },
-      });
-  }
-
-  discard(suggestion: MovieSuggestion): void {
-    this.busy.set(true);
-    this.actionError.set(null);
-    this.suggestionApi.dismiss(suggestion).subscribe({
-      next: () => this.leave('left'),
+    sections$.subscribe({
+      next: (sections) => {
+        this.sections.set(sections);
+        this.loading.set(false);
+      },
       error: () => {
-        this.actionError.set('No se pudo descartar la sugerencia.');
-        this.busy.set(false);
+        this.loadError.set(this.labels().loadError);
+        this.loading.set(false);
       },
     });
   }
 
-  onAnimationEnd(): void {
-    const animation = this.animation();
-    if (animation && animation !== 'enter') {
-      this.index.update((i) => i + 1);
-      this.busy.set(false);
-      this.animation.set(this.current() ? 'enter' : null);
-    } else {
-      this.animation.set(null);
+  refreshSection(id: string): void {
+    if (this.refreshingId() !== null) {
+      return;
     }
+    this.refreshingId.set(id);
+    this.refreshError.set(null);
+    const deck$ =
+      this.type() === 'MOVIE'
+        ? this.suggestionApi.movieDeck(id)
+        : this.suggestionApi.books().pipe(map((suggestions) => this.bookSection(suggestions)));
+    deck$.subscribe({
+      next: (deck) => {
+        this.sections.update((sections) => sections.map((s) => (s.id === id ? deck : s)));
+        this.refreshingId.set(null);
+      },
+      error: () => {
+        this.refreshError.set('No se pudo refrescar la fila.');
+        this.refreshingId.set(null);
+      },
+    });
   }
 
-  private leave(direction: 'left' | 'right' | 'up'): void {
-    this.animation.set(direction);
+  private bookSection(suggestions: Suggestion[]): SuggestionDeck {
+    return { id: 'books', title: 'Afines a tus lecturas', suggestions };
   }
 }

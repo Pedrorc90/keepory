@@ -67,10 +67,10 @@ export interface AttributeField {
 
 export const ATTRIBUTE_FIELDS: Record<ItemType, AttributeField[]> = {
   MOVIE: [
-    { key: 'director', label: 'Dirección', kind: 'text' },
     { key: 'year', label: 'Año', kind: 'number' },
     { key: 'durationMinutes', label: 'Duración (min)', kind: 'number' },
     { key: 'genres', label: 'Géneros (separados por comas)', kind: 'list' },
+    { key: 'watchProviders', label: 'Dónde ver (separadas por comas)', kind: 'list' },
     { key: 'originalTitle', label: 'Título original', kind: 'text' },
   ],
   BOOK: [
@@ -82,6 +82,59 @@ export const ATTRIBUTE_FIELDS: Record<ItemType, AttributeField[]> = {
     { key: 'categories', label: 'Categorías (separadas por comas)', kind: 'list' },
   ],
 };
+
+export interface GenreChip {
+  name: string;
+  dotClass: string;
+}
+
+const GENRE_DOT_CLASSES = ['bg-amber', 'bg-moss', 'bg-rust', 'bg-muted'];
+
+export function genreChips(value: unknown): GenreChip[] | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  return value.map((raw) => {
+    const name = String(raw).trim();
+    let hash = 0;
+    for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
+    return { name, dotClass: GENRE_DOT_CLASSES[Math.abs(hash) % GENRE_DOT_CLASSES.length] };
+  });
+}
+
+export interface ProviderBadge {
+  name: string;
+  icon: string | null;
+}
+
+const PROVIDER_ICONS: [prefix: string, file: string][] = [
+  ['netflix', 'netflix'],
+  ['amazon prime video', 'amazon-prime-video'],
+  ['disney plus', 'disney-plus'],
+  ['skyshowtime', 'skyshowtime'],
+  ['movistar plus', 'movistar-plus'],
+  ['atres', 'atres-player'],
+  ['tivify', 'tivify'],
+];
+
+function providerIcon(name: string): string | null {
+  const normalized = name.trim().toLowerCase();
+  const match = PROVIDER_ICONS.find(([prefix]) => normalized.startsWith(prefix));
+  return match ? `/providers/${match[1]}.jpg` : null;
+}
+
+export function providerBadges(value: unknown): ProviderBadge[] | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const badges: ProviderBadge[] = [];
+  const seen = new Set<string>();
+  for (const raw of value) {
+    const name = String(raw).trim();
+    const icon = providerIcon(name);
+    const key = icon ?? name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    badges.push({ name, icon });
+  }
+  return badges;
+}
 
 export const ITEM_TYPES = Object.keys(TYPE_LABELS) as ItemType[];
 

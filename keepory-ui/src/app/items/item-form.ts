@@ -7,13 +7,18 @@ import { ItemApi } from './item-api';
 import {
   ATTRIBUTE_FIELDS,
   AttributeField,
+  GenreChip,
   ITEM_STATUSES,
   ITEM_TYPES,
   ItemRequest,
   ItemStatus,
   ItemType,
+  ProviderBadge,
   STATUS_LABELS,
+  STATUS_SPINE_CLASSES,
   TYPE_LABELS,
+  genreChips,
+  providerBadges,
 } from './item.model';
 import { MetadataApi } from './metadata-api';
 import { MetadataSearchResult } from './metadata.model';
@@ -33,27 +38,52 @@ import { MetadataSearchResult } from './metadata.model';
           <a routerLink="/items" class="ml-2 underline">Volver a la colección</a>
         </p>
       } @else {
-        <form [formGroup]="form" (ngSubmit)="save()" class="mt-6 grid gap-6 md:grid-cols-[1fr_200px]">
+        <form [formGroup]="form" (ngSubmit)="save()" class="mt-6 grid gap-6">
           <div class="grid content-start gap-4">
-            <div class="grid gap-4 sm:grid-cols-2">
-              <label class="grid gap-1.5 text-sm">
-                <span class="text-muted">Tipo</span>
-                <select formControlName="type" class="rounded-md border border-line bg-panel px-3 py-2 focus:border-amber focus:outline-none">
-                  @for (t of types; track t) {
-                    <option [value]="t">{{ typeLabels[t] }}</option>
-                  }
-                </select>
-              </label>
-              <label class="grid gap-1.5 text-sm">
-                <span class="text-muted">Estado</span>
-                <select formControlName="status" class="rounded-md border border-line bg-panel px-3 py-2 focus:border-amber focus:outline-none">
-                  @for (s of statuses; track s) {
-                    <option [value]="s">{{ statusLabels[s] }}</option>
-                  }
-                </select>
-              </label>
+            <div class="grid gap-1.5 text-sm">
+              <span class="text-muted">Tipo</span>
+              <div class="grid grid-cols-2 gap-3">
+                @for (t of types; track t) {
+                  <label class="cursor-pointer">
+                    <input type="radio" formControlName="type" [value]="t" class="peer sr-only" />
+                    <span
+                      class="flex items-center gap-3 rounded-md border border-line bg-panel px-4 py-3 transition hover:border-amber/60 peer-checked:border-amber peer-checked:bg-amber/10 peer-focus-visible:ring-2 peer-focus-visible:ring-amber/70"
+                    >
+                      @if (t === 'MOVIE') {
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-6 w-6 shrink-0 text-rust" aria-hidden="true">
+                          <rect x="3" y="4" width="18" height="16" rx="2" />
+                          <path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4" />
+                        </svg>
+                      } @else {
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-6 w-6 shrink-0 text-moss" aria-hidden="true">
+                          <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+                        </svg>
+                      }
+                      <span class="font-display text-base">{{ typeLabels[t] }}</span>
+                    </span>
+                  </label>
+                }
+              </div>
             </div>
 
+            <div class="grid gap-1.5 text-sm">
+              <span class="text-muted">Estado</span>
+              <div class="flex flex-wrap gap-2">
+                @for (s of statuses; track s) {
+                  <label class="cursor-pointer">
+                    <input type="radio" formControlName="status" [value]="s" class="peer sr-only" />
+                    <span
+                      class="flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm text-muted transition hover:border-amber/60 hover:text-paper peer-checked:border-amber peer-checked:bg-amber/15 peer-checked:text-paper peer-focus-visible:ring-2 peer-focus-visible:ring-amber/70"
+                    >
+                      <span class="h-2 w-2 rounded-full" [class]="spineClasses[s]"></span>
+                      {{ statusLabels[s] }}
+                    </span>
+                  </label>
+                }
+              </div>
+            </div>
+
+            @if (!id) {
             <div class="grid gap-1.5 text-sm">
               <span class="text-muted">Buscar metadata</span>
               <div class="flex gap-2">
@@ -104,99 +134,152 @@ import { MetadataSearchResult } from './metadata.model';
                 </ul>
               }
             </div>
-
-            <label class="grid gap-1.5 text-sm">
-              <span class="text-muted">Título</span>
-              <input
-                formControlName="title"
-                maxlength="255"
-                placeholder="p. ej. Dune, El nombre del viento…"
-                class="rounded-md border border-line bg-panel px-3 py-2 placeholder:text-muted focus:border-amber focus:outline-none"
-              />
-              @if (submitted() && form.controls.title.invalid) {
-                <span class="text-xs text-rust">El título es obligatorio.</span>
-              }
-            </label>
-
-            <label class="grid gap-1.5 text-sm">
-              <span class="text-muted">URL de la carátula</span>
-              <input
-                formControlName="coverUrl"
-                placeholder="https://…"
-                class="rounded-md border border-line bg-panel px-3 py-2 placeholder:text-muted focus:border-amber focus:outline-none"
-              />
-            </label>
-
-            <div class="grid gap-4 sm:grid-cols-2">
-              <label class="grid gap-1.5 text-sm">
-                <span class="text-muted">Nota</span>
-                <select formControlName="rating" class="rounded-md border border-line bg-panel px-3 py-2 focus:border-amber focus:outline-none">
-                  <option value="">Sin nota</option>
-                  @for (r of ratings; track r) {
-                    <option [value]="r">{{ starLabel(r) }}</option>
-                  }
-                </select>
-              </label>
-              <label class="grid gap-1.5 text-sm">
-                <span class="text-muted">Completado el</span>
-                <input
-                  type="date"
-                  formControlName="completedAt"
-                  class="rounded-md border border-line bg-panel px-3 py-2 focus:border-amber focus:outline-none"
-                />
-              </label>
-            </div>
-
-            <div formGroupName="attrs" class="grid gap-4 sm:grid-cols-2">
-              @for (f of attributeFields(); track f.key) {
-                <label class="grid gap-1.5 text-sm">
-                  <span class="text-muted">{{ f.label }}</span>
-                  <input
-                    [formControlName]="f.key"
-                    [type]="f.kind === 'number' ? 'number' : 'text'"
-                    class="rounded-md border border-line bg-panel px-3 py-2 focus:border-amber focus:outline-none"
-                  />
-                </label>
-              }
-            </div>
-
-            <label class="grid gap-1.5 text-sm">
-              <span class="text-muted">Notas</span>
-              <textarea
-                formControlName="notes"
-                rows="4"
-                placeholder="Impresiones, dónde lo dejaste, a quién se lo prestaste…"
-                class="rounded-md border border-line bg-panel px-3 py-2 placeholder:text-muted focus:border-amber focus:outline-none"
-              ></textarea>
-            </label>
-
-            @if (saveError()) {
-              <p class="rounded-md border border-rust/50 bg-rust/10 px-4 py-3 text-sm">{{ saveError() }}</p>
             }
 
-            <div class="mt-1 flex items-center gap-3">
-              <button
-                type="submit"
-                [disabled]="saving()"
-                class="rounded-md bg-amber px-5 py-2 text-sm font-medium text-ink transition enabled:hover:brightness-110 disabled:opacity-60"
-              >
-                {{ saving() ? 'Guardando…' : 'Guardar' }}
-              </button>
-              <a routerLink="/items" class="text-sm text-muted transition hover:text-paper">Cancelar</a>
-            </div>
           </div>
 
-          <div class="order-first md:order-none">
-            <div class="aspect-2/3 w-40 overflow-hidden rounded-md bg-panel ring-1 ring-line md:w-full">
-              @if (coverPreview(); as url) {
-                <img [src]="url" alt="Vista previa de la carátula" class="h-full w-full object-cover" />
-              } @else {
-                <div class="flex h-full items-center justify-center p-4 text-center text-xs text-muted">
-                  Sin carátula
+          @if (detailsVisible()) {
+            <div class="grid gap-6 border-t border-line pt-6 md:grid-cols-[1fr_280px]">
+              <div class="grid content-start gap-4">
+                <label class="grid gap-1.5 text-sm">
+                  <span class="text-muted">Título</span>
+                  <input
+                    formControlName="title"
+                    maxlength="255"
+                    placeholder="p. ej. Dune, El nombre del viento…"
+                    class="rounded-md border border-line bg-panel px-3 py-2 placeholder:text-muted focus:border-amber focus:outline-none"
+                  />
+                  @if (submitted() && form.controls.title.invalid) {
+                    <span class="text-xs text-rust">El título es obligatorio.</span>
+                  }
+                </label>
+
+                @if (!id) {
+                  <label class="grid gap-1.5 text-sm">
+                    <span class="text-muted">URL de la carátula</span>
+                    <input
+                      formControlName="coverUrl"
+                      placeholder="https://…"
+                      class="rounded-md border border-line bg-panel px-3 py-2 placeholder:text-muted focus:border-amber focus:outline-none"
+                    />
+                  </label>
+                }
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <label class="grid gap-1.5 text-sm">
+                    <span class="text-muted">Nota</span>
+                    <select formControlName="rating" class="rounded-md border border-line bg-panel px-3 py-2 focus:border-amber focus:outline-none">
+                      <option value="">Sin nota</option>
+                      @for (r of ratings; track r) {
+                        <option [value]="r">{{ starLabel(r) }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label class="grid gap-1.5 text-sm">
+                    <span class="text-muted">Completado el</span>
+                    <input
+                      type="date"
+                      formControlName="completedAt"
+                      class="rounded-md border border-line bg-panel px-3 py-2 focus:border-amber focus:outline-none"
+                    />
+                  </label>
                 </div>
-              }
+
+                <div formGroupName="attrs" class="grid gap-4 sm:grid-cols-2">
+                  @for (f of attributeFields(); track f.key) {
+                    <label class="grid gap-1.5 text-sm">
+                      <span class="text-muted">{{ f.label }}</span>
+                      <input
+                        [formControlName]="f.key"
+                        [type]="f.kind === 'number' ? 'number' : 'text'"
+                        class="rounded-md border border-line bg-panel px-3 py-2 focus:border-amber focus:outline-none"
+                      />
+                    </label>
+                  }
+                </div>
+
+                @if (genres(); as chips) {
+                  <div class="grid gap-1.5 text-sm">
+                    <span class="text-muted">Géneros</span>
+                    <div class="flex flex-wrap gap-2">
+                      @for (g of chips; track g.name) {
+                        <span class="flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm text-muted">
+                          <span class="h-2 w-2 rounded-full" [class]="g.dotClass"></span>
+                          {{ g.name }}
+                        </span>
+                      }
+                    </div>
+                  </div>
+                }
+
+                @if (providerLogos(); as providers) {
+                  <div class="grid gap-1.5 text-sm">
+                    <span class="text-muted">Dónde ver</span>
+                    <div class="flex flex-wrap items-center gap-2">
+                      @for (provider of providers; track provider.name) {
+                        @if (provider.icon) {
+                          <img
+                            [src]="provider.icon"
+                            [alt]="provider.name"
+                            [title]="provider.name"
+                            class="h-8 w-8 rounded"
+                            loading="lazy"
+                          />
+                        } @else {
+                          <span class="text-xs text-muted">{{ provider.name }}</span>
+                        }
+                      }
+                    </div>
+                  </div>
+                }
+
+                <label class="grid gap-1.5 text-sm">
+                  <span class="text-muted">Notas</span>
+                  <textarea
+                    formControlName="notes"
+                    rows="4"
+                    placeholder="Impresiones, dónde lo dejaste, a quién se lo prestaste…"
+                    class="rounded-md border border-line bg-panel px-3 py-2 placeholder:text-muted focus:border-amber focus:outline-none"
+                  ></textarea>
+                </label>
+
+                @if (saveError()) {
+                  <p class="rounded-md border border-rust/50 bg-rust/10 px-4 py-3 text-sm">{{ saveError() }}</p>
+                }
+
+                <div class="mt-1 flex items-center gap-3">
+                  <button
+                    type="submit"
+                    [disabled]="saving()"
+                    class="rounded-md bg-amber px-5 py-2 text-sm font-medium text-ink transition enabled:hover:brightness-110 disabled:opacity-60"
+                  >
+                    {{ saving() ? 'Guardando…' : 'Guardar' }}
+                  </button>
+                  <a routerLink="/items" class="text-sm text-muted transition hover:text-paper">Cancelar</a>
+                </div>
+              </div>
+
+              <div class="order-first md:order-none">
+                <div class="aspect-2/3 w-56 overflow-hidden rounded-md bg-panel ring-1 ring-line md:w-full">
+                  @if (coverPreview(); as url) {
+                    <img [src]="url" alt="Vista previa de la carátula" class="h-full w-full object-cover" />
+                  } @else {
+                    <div class="flex h-full items-center justify-center p-4 text-center text-xs text-muted">
+                      Sin carátula
+                    </div>
+                  }
+                </div>
+              </div>
             </div>
-          </div>
+          } @else {
+            <button
+              type="button"
+              (click)="detailsVisible.set(true)"
+              class="justify-self-start rounded-md border border-line px-4 py-2 text-sm transition hover:border-amber"
+            >
+              Añadir manualmente
+            </button>
+          }
         </form>
       }
     </div>
@@ -214,6 +297,7 @@ export class ItemForm {
   readonly statuses = ITEM_STATUSES;
   readonly typeLabels = TYPE_LABELS;
   readonly statusLabels = STATUS_LABELS;
+  readonly spineClasses = STATUS_SPINE_CLASSES;
   readonly ratings = [1, 2, 3, 4, 5];
 
   readonly attrsForm = this.fb.record<string>({});
@@ -234,8 +318,11 @@ export class ItemForm {
   readonly searchError = signal<string | null>(null);
   readonly searchResults = signal<MetadataSearchResult[] | null>(null);
   readonly attributeFields = signal<AttributeField[]>(ATTRIBUTE_FIELDS['MOVIE']);
+  readonly genres = signal<GenreChip[] | null>(null);
+  readonly providerLogos = signal<ProviderBadge[] | null>(null);
 
   readonly coverPreview = toSignal(this.form.controls.coverUrl.valueChanges, { initialValue: '' });
+  readonly detailsVisible = signal(this.id !== null);
   readonly submitted = signal(false);
   readonly saving = signal(false);
   readonly saveError = signal<string | null>(null);
@@ -247,9 +334,10 @@ export class ItemForm {
 
   constructor() {
     this.rebuildAttrs();
-    this.form.controls.type.valueChanges.subscribe(() => {
+    this.form.controls.type.valueChanges.subscribe((type) => {
       this.searchResults.set(null);
       this.rebuildAttrs();
+      this.providerLogos.set(type === 'MOVIE' ? providerBadges(this.attributes['watchProviders']) : null);
     });
     if (this.id) this.loadItem(this.id);
   }
@@ -270,6 +358,7 @@ export class ItemForm {
           notes: item.notes ?? '',
         });
         this.rebuildAttrs();
+        this.providerLogos.set(providerBadges(this.attributes['watchProviders']));
       },
       error: () => this.loadError.set('No se pudo cargar el elemento.'),
     });
@@ -303,6 +392,7 @@ export class ItemForm {
         this.form.patchValue({ title: detail.title, coverUrl: detail.coverUrl ?? '' });
         this.rebuildAttrs();
         this.searchResults.set(null);
+        this.detailsVisible.set(true);
         this.searching.set(false);
       },
       error: () => {
@@ -313,8 +403,15 @@ export class ItemForm {
   }
 
   private rebuildAttrs(): void {
-    const fields = ATTRIBUTE_FIELDS[this.form.controls.type.value];
+    // Genres render as read-only chips; when editing, watch providers render as
+    // read-only logos and original title is hidden.
+    const fields = ATTRIBUTE_FIELDS[this.form.controls.type.value].filter(
+      (f) =>
+        f.key !== 'genres' &&
+        (!this.id || (f.key !== 'watchProviders' && f.key !== 'originalTitle')),
+    );
     this.attributeFields.set(fields);
+    this.genres.set(genreChips(this.attributes['genres']));
     const attrs = this.attrsForm;
     for (const key of Object.keys(attrs.controls)) {
       attrs.removeControl(key, { emitEvent: false });

@@ -3,10 +3,13 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { Item, ItemRequest, ItemStatus, ItemType, Page } from './item.model';
 
+export type ItemSort = 'recent' | 'title' | 'genre';
+
 export interface ItemFilters {
   type?: ItemType | null;
   status?: ItemStatus | null;
   q?: string | null;
+  sort?: ItemSort;
   page?: number;
   size?: number;
 }
@@ -23,6 +26,7 @@ export class ItemApi {
     if (filters.type) params = params.set('type', filters.type);
     if (filters.status) params = params.set('status', filters.status);
     if (filters.q) params = params.set('q', filters.q);
+    if (filters.sort && filters.sort !== 'recent') params = params.set('sortBy', filters.sort);
     return this.http.get<Page<Item>>(this.baseUrl, { params });
   }
 

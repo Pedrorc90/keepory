@@ -1,14 +1,17 @@
-import { Component, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import { ItemApi } from './item-api';
+import { Component, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ItemApi, ItemSort } from './item-api';
 import {
   ITEM_STATUSES,
   Item,
   ItemStatus,
   ItemType,
   Page,
+  ProviderBadge,
   STATUS_LABELS,
   STATUS_SPINE_CLASSES,
+  providerBadges,
 } from './item.model';
 
 @Component({
@@ -16,7 +19,13 @@ import {
   imports: [RouterLink],
   template: `
     <div class="flex flex-wrap items-baseline gap-x-4 gap-y-2">
-      <h1 class="font-display text-3xl font-semibold">Colección</h1>
+      <h1 class="font-display text-3xl font-semibold">
+        MyKeep@if (headingSuffix(); as suffix) {
+          <span class="ml-2 align-middle font-sans text-sm font-normal uppercase tracking-[0.25em] text-amber">
+            {{ suffix }}
+          </span>
+        }
+      </h1>
       @if (result(); as page) {
         <span class="text-sm text-muted">{{ page.totalElements }} en la estantería</span>
       }
@@ -29,30 +38,7 @@ import {
     </div>
 
     <div class="mt-7 items-start gap-8 md:flex">
-      <aside class="md:w-64 md:shrink-0">
-        <nav class="flex items-start gap-3 md:grid md:grid-cols-2 md:gap-3" aria-label="Filtrar por tipo">
-          @for (card of typeCards; track card.label) {
-            <button
-              (click)="filterByType(card.value)"
-              [attr.aria-pressed]="type() === card.value"
-              class="relative block w-full flex-1 overflow-hidden rounded-md bg-panel text-left shadow-lg shadow-black/40 ring-1 transition duration-200 focus-visible:outline-none md:flex-none"
-              [class]="
-                card.stagger +
-                (type() === card.value
-                  ? ' z-10 -translate-y-1 ring-amber'
-                  : ' ring-line hover:z-10 hover:-translate-y-1 hover:ring-amber/60')
-              "
-            >
-              <span class="block h-1.5" [class]="card.band"></span>
-              <span class="block px-3 pb-10 pt-3 font-display text-base md:aspect-2/3 md:pb-0 md:text-xl">
-                {{ card.label }}
-              </span>
-            </button>
-          }
-        </nav>
-      </aside>
-
-      <aside class="mt-7 md:order-last md:mt-0 md:w-36 md:shrink-0">
+      <aside class="md:order-last md:w-36 md:shrink-0">
         <p class="mb-2 hidden text-xs uppercase tracking-wide text-muted md:block">Estado</p>
         <nav class="flex flex-wrap gap-2 md:flex-col md:items-start" aria-label="Filtrar por estado">
           @for (bubble of statusBubbles; track bubble.label) {
@@ -85,6 +71,18 @@ import {
         class="min-w-48 flex-1 rounded-md border border-line bg-panel px-3 py-2 text-sm placeholder:text-muted focus:border-amber focus:outline-none"
         aria-label="Buscar por título"
       />
+      <label class="flex items-center gap-2 text-sm text-muted">
+        Ordenar por
+        <select
+          [value]="sort()"
+          (change)="sortBy($any($event.target).value)"
+          class="rounded-md border border-line bg-panel px-2.5 py-2 text-sm text-paper focus:border-amber focus:outline-none"
+        >
+          @for (option of sortOptions; track option.value) {
+            <option [value]="option.value">{{ option.label }}</option>
+          }
+        </select>
+      </label>
     </div>
 
     @if (error()) {
@@ -104,7 +102,7 @@ import {
           </p>
         </div>
       } @else {
-        <ul class="mt-7 grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+        <ul class="mt-7 grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9">
           @for (item of page.content; track item.id) {
             <li class="group">
               <a [routerLink]="['/items', item.id, 'edit']" class="block">
@@ -143,6 +141,23 @@ import {
               <div class="mt-2 flex items-start justify-between gap-2">
                 <div class="min-w-0">
                   <p class="text-sm">{{ item.title }}</p>
+                  @if (watchProviders(item); as providers) {
+                    <div class="mt-0.5 flex flex-wrap items-center gap-1">
+                      @for (provider of providers; track provider.name) {
+                        @if (provider.icon) {
+                          <img
+                            [src]="provider.icon"
+                            [alt]="provider.name"
+                            [title]="provider.name"
+                            class="h-5 w-5 rounded"
+                            loading="lazy"
+                          />
+                        } @else {
+                          <span class="text-xs text-muted">{{ provider.name }}</span>
+                        }
+                      }
+                    </div>
+                  }
                   @if (item.rating) {
                     <p class="text-xs text-amber">{{ stars(item.rating) }}</p>
                   }
@@ -187,18 +202,29 @@ import {
 export class ItemList {
   private readonly api = inject(ItemApi);
 
-  readonly typeCards: { value: ItemType | ''; label: string; band: string; stagger: string }[] = [
-    { value: '', label: 'Todo', band: 'bg-amber', stagger: 'md:col-start-1 md:row-start-1 md:row-span-2' },
-    { value: 'MOVIE', label: 'Películas', band: 'bg-rust', stagger: 'mt-3 md:mt-0 md:col-start-2 md:row-start-2 md:row-span-2' },
-    { value: 'BOOK', label: 'Libros', band: 'bg-moss', stagger: 'mt-6 md:mt-0 md:col-start-1 md:row-start-3 md:row-span-2' },
-  ];
   readonly statusBubbles: { value: ItemStatus | ''; label: string }[] = [
     { value: '', label: 'Todos' },
     ...ITEM_STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] })),
   ];
   readonly spineClasses = STATUS_SPINE_CLASSES;
+  readonly sortOptions: { value: ItemSort; label: string }[] = [
+    { value: 'title', label: 'Título' },
+    { value: 'genre', label: 'Género' },
+    { value: 'recent', label: 'Recientes' },
+  ];
 
   readonly type = signal<ItemType | ''>('');
+  readonly headingSuffix = computed(() => {
+    switch (this.type()) {
+      case 'MOVIE':
+        return 'Movies';
+      case 'BOOK':
+        return 'Books';
+      default:
+        return '';
+    }
+  });
+  readonly sort = signal<ItemSort>('recent');
   readonly status = signal<ItemStatus | ''>('');
   readonly q = signal('');
   readonly result = signal<Page<Item> | null>(null);
@@ -209,7 +235,15 @@ export class ItemList {
   private searchTimer?: ReturnType<typeof setTimeout>;
 
   constructor() {
-    this.load();
+    inject(ActivatedRoute)
+      .data.pipe(takeUntilDestroyed())
+      .subscribe((data) => {
+        this.type.set((data['type'] as ItemType | undefined) ?? '');
+        this.status.set('');
+        this.q.set('');
+        this.page = 0;
+        this.load();
+      });
   }
 
   load(): void {
@@ -220,6 +254,7 @@ export class ItemList {
         type: this.type() || null,
         status: this.status() || null,
         q: this.q().trim() || null,
+        sort: this.sort(),
         page: this.page,
       })
       .subscribe({
@@ -234,14 +269,14 @@ export class ItemList {
       });
   }
 
-  filterByType(value: string): void {
-    this.type.set(value as ItemType | '');
+  filterByStatus(value: string): void {
+    this.status.set(value as ItemStatus | '');
     this.page = 0;
     this.load();
   }
 
-  filterByStatus(value: string): void {
-    this.status.set(value as ItemStatus | '');
+  sortBy(value: string): void {
+    this.sort.set(value as ItemSort);
     this.page = 0;
     this.load();
   }
@@ -261,11 +296,15 @@ export class ItemList {
   }
 
   hasFilters(): boolean {
-    return this.type() !== '' || this.status() !== '' || this.q().trim() !== '';
+    return this.status() !== '' || this.q().trim() !== '';
   }
 
   stars(rating: number): string {
     return '★'.repeat(rating);
+  }
+
+  watchProviders(item: Item): ProviderBadge[] | null {
+    return providerBadges(item.attributes['watchProviders']);
   }
 
   remove(item: Item): void {

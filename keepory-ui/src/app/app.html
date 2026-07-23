@@ -6,7 +6,15 @@
       </a>
       <span class="hidden text-sm text-muted sm:inline">lo visto, lo leído, lo vivido</span>
       <nav class="ml-auto flex items-center gap-4 text-sm">
-        <a routerLink="/items" routerLinkActive="text-amber" class="text-muted transition hover:text-paper">Colección</a>
+        <a
+          routerLink="/items"
+          routerLinkActive="text-amber"
+          [routerLinkActiveOptions]="{ exact: true }"
+          class="text-muted transition hover:text-paper"
+          >Todos</a
+        >
+        <a routerLink="/movies" routerLinkActive="text-amber" class="text-muted transition hover:text-paper">Películas</a>
+        <a routerLink="/books" routerLinkActive="text-amber" class="text-muted transition hover:text-paper">Libros</a>
         <a routerLink="/suggestions" routerLinkActive="text-amber" class="text-muted transition hover:text-paper">Sugerencias</a>
       </nav>
     </div>
@@ -16,7 +24,8 @@
   </main>
   <footer class="border-t border-line">
     <div class="mx-auto w-full sm:max-w-[80%] px-4 py-3 text-xs text-muted">
-      This product uses the TMDB API but is not endorsed or certified by TMDB. Book covers courtesy of Open Library.
+      This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability data provided by
+      JustWatch. Book covers courtesy of Open Library.
     </div>
   </footer>
 </div>
