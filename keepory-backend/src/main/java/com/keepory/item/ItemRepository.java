@@ -14,19 +14,36 @@ public interface ItemRepository extends JpaRepository<Item, UUID> {
 
     Optional<Item> findByIdAndDeletedAtIsNull(UUID id);
 
+    List<Item> findByTypeAndDeletedAtIsNull(ItemType type);
+
     List<Item> findByTypeAndSourceAndDeletedAtIsNull(ItemType type, String source);
 
     boolean existsByTypeAndSourceAndExternalIdAndDeletedAtIsNull(ItemType type, String source, String externalId);
 
-    @Query("""
-            select i from Item i
-            where i.deletedAt is null
-              and (:type is null or i.type = :type)
-              and (:status is null or i.status = :status)
-              and (:q = '' or lower(i.title) like lower(concat('%', :q, '%')))
-            """)
-    Page<Item> search(@Param("type") ItemType type,
-                      @Param("status") ItemStatus status,
+    // Native SQL because JPQL cannot order by JSONB fields (first genre/category).
+    @Query(value = """
+            select * from item i
+            where i.deleted_at is null
+              and (cast(:type as text) is null or i.type = cast(:type as text))
+              and (cast(:status as text) is null or i.status = cast(:status as text))
+              and (:q = '' or i.title ilike '%' || :q || '%')
+            order by
+              case when :sort = 'title' then lower(i.title) end,
+              case when :sort = 'genre'
+                   then lower(coalesce(i.attributes->'genres'->>0, i.attributes->'categories'->>0)) end nulls last,
+              i.created_at desc
+            """,
+            countQuery = """
+            select count(*) from item i
+            where i.deleted_at is null
+              and (cast(:type as text) is null or i.type = cast(:type as text))
+              and (cast(:status as text) is null or i.status = cast(:status as text))
+              and (:q = '' or i.title ilike '%' || :q || '%')
+            """,
+            nativeQuery = true)
+    Page<Item> search(@Param("type") String type,
+                      @Param("status") String status,
                       @Param("q") String q,
+                      @Param("sort") String sort,
                       Pageable pageable);
 }

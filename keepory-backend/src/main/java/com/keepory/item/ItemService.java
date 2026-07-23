@@ -5,6 +5,7 @@ import com.keepory.item.dto.ItemResponse;
 import jakarta.persistence.EntityExistsException;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,9 +25,15 @@ public class ItemService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ItemResponse> search(ItemType type, ItemStatus status, String q, Pageable pageable) {
+    public Page<ItemResponse> search(ItemType type, ItemStatus status, String q, String sort, Pageable pageable) {
         String query = q == null ? "" : q.trim();
-        return repository.search(type, status, query, pageable).map(ItemResponse::from);
+        String sortKey = "title".equals(sort) || "genre".equals(sort) ? sort : "recent";
+        // The native query defines its own order; drop any sort carried by the Pageable.
+        Pageable page = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        return repository.search(
+                type == null ? null : type.name(),
+                status == null ? null : status.name(),
+                query, sortKey, page).map(ItemResponse::from);
     }
 
     @Transactional(readOnly = true)

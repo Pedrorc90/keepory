@@ -5,7 +5,6 @@ import com.keepory.item.dto.ItemResponse;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -36,8 +35,9 @@ public class ItemController {
             @RequestParam(required = false) ItemType type,
             @RequestParam(required = false) ItemStatus status,
             @RequestParam(required = false) String q,
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return service.search(type, status, q, pageable);
+            @RequestParam(required = false) String sortBy,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return service.search(type, status, q, sortBy, pageable);
     }
 
     @GetMapping("/{id}")
