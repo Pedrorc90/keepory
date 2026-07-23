@@ -7,10 +7,11 @@ Fuente de verdad del plan por fases. Claude lo lee al inicio de sesión y lo act
 - [x] **F0 — Scaffolding** (2026-07-13): repo, docker-compose PostgreSQL 16
 - [x] **F1 — CRUD API** (2026-07-14): item CRUD, búsqueda, paging, Flyway
 - [x] **F2 — Panel Angular** (2026-07-14): grid de tarjetas con carátula, filtros tipo/estado/búsqueda, form alta/edición, tema oscuro "biblioteca de noche"
-- [ ] **F3 — Metadata externa** (en curso, ver desglose abajo)
+- [x] **F3 — Metadata externa** (cerrada 2026-07-23, ver desglose abajo)
 - [x] **F4 — Sugerencias** (cerrada 2026-07-15; alcance: solo descubrimiento externo de películas en esta fase)
   - [x] **F4.1 — Descubrimiento de pelis** (2026-07-15, probada OK): pantalla `/suggestions` tipo baraja — cover + título/año/nota TMDB/sinopsis y acciones Pendiente / Ya la he visto / Descartar. Backend `GET /api/suggestions/movies` (semilla: hasta 5 completadas al azar → TMDB recommendations, excluye colección y descartes) y `POST /api/suggestions/dismiss` (tabla `suggestion_dismissal`, migración V3).
-  - Ideas aplazadas: sugerencias desde la propia colección ("qué ver ahora"), libros (bloqueado por Google Books), redescubrimiento/estadísticas.
+  - [ ] **F4.2 — Descubrimiento de libros** (implementado 2026-07-18, probado 2026-07-23: sigue fallando, ver bloqueos): toggle Pelis/Libros en `/suggestions`; `GET /api/suggestions/books` — semillas: libros completados → búsquedas `inauthor:`/`subject:` en español (langRestrict=es), dedupe por título normalizado, excluye colección y descartes.
+  - Ideas aplazadas: sugerencias desde la propia colección ("qué ver ahora"), redescubrimiento/estadísticas.
 - [ ] **F5 — Auth + deploy**
 - [ ] **F6 — Offline móvil** (Capacitor; offline-first, sync pull/push incremental por `updatedAt`, last-write-wins)
 
@@ -31,7 +32,7 @@ Fuente de verdad del plan por fases. Claude lo lee al inicio de sesión y lo act
 
 ## Bloqueos / notas
 
-- **Búsqueda de libros sigue fallando** (2026-07-15): `GOOGLE_BOOKS_API_KEY` ya creada en Google Cloud pero las peticiones fallan — pendiente de depurar (¿key sin propagar al proceso, Books API no habilitada, restricciones de la key, o respuesta de error distinta?). Aparcado por decisión de Pedro.
+- **Búsqueda de libros sigue fallando** (actualizado 2026-07-23): se probó cambiar `GoogleBooksClient` al host `books.googleapis.com` (el legacy `www.googleapis.com` daba 503 `backendFailed` en ~40% de peticiones con key) + retry con backoff — sigue fallando. Pendiente de depurar más a fondo.
 - `TMDB_API_KEY` por variable de entorno (Pedro la tiene; no va en el repo).
 - Attributes que devuelve metadata — pelis: director/durationMinutes/genres/year/originalTitle; libros: authors/pageCount/publisher/year/isbn/categories.
 - **F3.1 y F3.2 están hechas pero sin commitear** (a 2026-07-15).
