@@ -2,8 +2,10 @@ package com.keepory.metadata;
 
 import com.keepory.metadata.dto.MetadataDetail;
 import com.keepory.metadata.dto.MetadataSearchResult;
+import com.keepory.suggestion.dto.Suggestion;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.util.UriBuilder;
@@ -11,6 +13,7 @@ import org.springframework.web.util.UriBuilder;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 @Component
@@ -18,25 +21,34 @@ public class GoogleBooksClient {
 
     public static final String SOURCE = "GOOGLE_BOOKS";
 
+    // Google Books randomly answers 503 backendFailed (~40% of keyed requests as of
+    // 2026-07); retrying is the documented client-side mitigation.
+    private static final int MAX_ATTEMPTS = 4;
+    private static final long RETRY_DELAY_MS = 150;
+
     private final RestClient client;
+    private final RestClient covers;
     private final String apiKey;
 
+    // books.googleapis.com, not www.googleapis.com: volume search on the legacy
+    // host fails with 503 backendFailed for keyed requests.
     public GoogleBooksClient(RestClient.Builder builder,
                              @Value("${keepory.google-books.api-key}") String apiKey) {
-        this.client = builder.baseUrl("https://www.googleapis.com/books/v1").build();
+        this.client = builder.baseUrl("https://books.googleapis.com/books/v1").build();
+        this.covers = builder.baseUrl("https://covers.openlibrary.org").build();
         this.apiKey = apiKey;
     }
 
     public List<MetadataSearchResult> search(String query) {
         SearchResponse response;
         try {
-            response = client.get().uri(uri -> withKey(uri.path("/volumes")
+            response = withRetry(() -> client.get().uri(uri -> withKey(uri.path("/volumes")
                             .queryParam("q", query)
                             .queryParam("maxResults", 10)
                             .queryParam("printType", "books"))
                             .build())
                     .retrieve()
-                    .body(SearchResponse.class);
+                    .body(SearchResponse.class));
         } catch (RestClientException ex) {
             throw new MetadataProviderException("Google Books request failed: " + ex.getMessage(), ex);
         }
@@ -51,12 +63,65 @@ public class GoogleBooksClient {
                 .toList();
     }
 
+    /**
+     * Seed-driven discovery for suggestions: Spanish-only, relevance-ordered results
+     * for an {@code inauthor:}/{@code subject:} query. Covers come straight from
+     * imageLinks — no Open Library HEAD probe, it would add one request per result.
+     */
+    public List<Suggestion> discover(String query) {
+        SearchResponse response;
+        try {
+            response = withRetry(() -> client.get().uri(uri -> withKey(uri.path("/volumes")
+                            .queryParam("q", query)
+                            .queryParam("maxResults", 20)
+                            .queryParam("printType", "books")
+                            .queryParam("langRestrict", "es"))
+                            .build())
+                    .retrieve()
+                    .body(SearchResponse.class));
+        } catch (RestClientException ex) {
+            throw new MetadataProviderException("Google Books request failed: " + ex.getMessage(), ex);
+        }
+        if (response == null || response.items() == null) {
+            return List.of();
+        }
+        return response.items().stream()
+                .filter(v -> v.volumeInfo() != null && v.volumeInfo().title() != null)
+                .filter(v -> looksSpanish(v.volumeInfo().title(), v.volumeInfo().description()))
+                .map(v -> new Suggestion(SOURCE, v.id(), v.volumeInfo().title(),
+                        year(v.volumeInfo().publishedDate()), cover(v.volumeInfo().imageLinks()),
+                        v.volumeInfo().description(), v.volumeInfo().averageRating()))
+                .toList();
+    }
+
+    // langRestrict alone is not enough: the catalog mislabels plenty of English
+    // volumes (comics especially) as Spanish, so check the visible text too.
+    private static boolean looksSpanish(String title, String description) {
+        String text = (" " + title + " " + (description == null ? "" : description) + " ").toLowerCase();
+        if (text.chars().anyMatch(c -> "áéíóúñ¿¡".indexOf(c) >= 0)) {
+            return true;
+        }
+        int spanish = markers(text, " el ", " la ", " los ", " las ", " de ", " del ", " que ", " una ", " es ", " para ");
+        int english = markers(text, " the ", " of ", " and ", " with ", " from ", " his ", " her ");
+        return spanish > english;
+    }
+
+    private static int markers(String text, String... words) {
+        int count = 0;
+        for (String word : words) {
+            if (text.contains(word)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     public MetadataDetail detail(String externalId) {
         Volume volume;
         try {
-            volume = client.get().uri(uri -> withKey(uri.path("/volumes/{id}")).build(externalId))
+            volume = withRetry(() -> client.get().uri(uri -> withKey(uri.path("/volumes/{id}")).build(externalId))
                     .retrieve()
-                    .body(Volume.class);
+                    .body(Volume.class));
         } catch (RestClientException ex) {
             throw new MetadataProviderException("Google Books request failed: " + ex.getMessage(), ex);
         }
@@ -88,6 +153,24 @@ public class GoogleBooksClient {
         return apiKey == null || apiKey.isBlank() ? uri : uri.queryParam("key", apiKey);
     }
 
+    private <T> T withRetry(Supplier<T> call) {
+        HttpServerErrorException.ServiceUnavailable last = null;
+        for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+            try {
+                return call.get();
+            } catch (HttpServerErrorException.ServiceUnavailable ex) {
+                last = ex;
+                try {
+                    Thread.sleep(RETRY_DELAY_MS << attempt);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw ex;
+                }
+            }
+        }
+        throw last;
+    }
+
     private static Integer year(String publishedDate) {
         if (publishedDate == null || publishedDate.length() < 4) {
             return null;
@@ -101,13 +184,26 @@ public class GoogleBooksClient {
 
     /**
      * Prefers Open Library covers by ISBN (hotlink-friendly licensing); falls back
-     * to the Google Books image link when no ISBN is available.
+     * to the Google Books image link when Open Library has no image for the ISBN.
      */
-    private static String cover(String isbn, ImageLinks links) {
-        if (isbn != null) {
+    private String cover(String isbn, ImageLinks links) {
+        if (isbn != null && openLibraryHasCover(isbn)) {
             return "https://covers.openlibrary.org/b/isbn/%s-L.jpg".formatted(isbn);
         }
         return cover(links);
+    }
+
+    // Open Library serves a blank placeholder for unknown ISBNs; default=false
+    // turns that into a 404 so missing covers are detectable.
+    private boolean openLibraryHasCover(String isbn) {
+        try {
+            covers.head().uri("/b/isbn/{isbn}-L.jpg?default=false", isbn)
+                    .retrieve()
+                    .toBodilessEntity();
+            return true;
+        } catch (RestClientException ex) {
+            return false;
+        }
     }
 
     private static String cover(ImageLinks links) {
@@ -152,6 +248,7 @@ public class GoogleBooksClient {
                               String publishedDate,
                               String description,
                               Integer pageCount,
+                              Double averageRating,
                               List<String> categories,
                               List<IndustryIdentifier> industryIdentifiers,
                               ImageLinks imageLinks) {

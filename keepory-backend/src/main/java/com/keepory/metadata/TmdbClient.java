@@ -3,7 +3,7 @@ package com.keepory.metadata;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.keepory.metadata.dto.MetadataDetail;
 import com.keepory.metadata.dto.MetadataSearchResult;
-import com.keepory.suggestion.dto.MovieSuggestion;
+import com.keepory.suggestion.dto.Suggestion;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -12,7 +12,9 @@ import org.springframework.web.client.RestClientException;
 import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -25,9 +27,12 @@ public class TmdbClient {
 
     private static final String IMAGE_BASE = "https://image.tmdb.org/t/p/w500";
     private static final String LANGUAGE = "es-ES";
+    private static final String WATCH_REGION = "ES";
 
     private final RestClient client;
     private final String apiKey;
+    // TMDB's genre catalog is static; fetched once per app run.
+    private volatile Map<String, Integer> genreIdsByName;
 
     public TmdbClient(RestClient.Builder builder, @Value("${keepory.tmdb.api-key}") String apiKey) {
         this.client = builder.baseUrl("https://api.themoviedb.org/3").build();
@@ -53,7 +58,7 @@ public class TmdbClient {
     public MetadataDetail detail(String externalId) {
         MovieDetail m = get(uri -> uri.path("/movie/{id}")
                 .queryParam("language", LANGUAGE)
-                .queryParam("append_to_response", "credits")
+                .queryParam("append_to_response", "credits,watch/providers")
                 .queryParam("api_key", apiKey)
                 .build(externalId), MovieDetail.class);
 
@@ -64,6 +69,10 @@ public class TmdbClient {
             attributes.put("genres", m.genres().stream().map(Genre::name).toList());
         }
         put(attributes, "year", year(m.releaseDate()));
+        List<String> providers = flatrateProviders(m.watchProviders());
+        if (!providers.isEmpty()) {
+            attributes.put("watchProviders", providers);
+        }
         if (m.originalTitle() != null && !m.originalTitle().equals(m.title())) {
             attributes.put("originalTitle", m.originalTitle());
         }
@@ -72,17 +81,47 @@ public class TmdbClient {
                 cover(m.posterPath()), attributes);
     }
 
-    public List<MovieSuggestion> recommendations(String externalId) {
-        RecommendationsResponse response = get(uri -> uri.path("/movie/{id}/recommendations")
+    public List<Suggestion> recommendations(String externalId) {
+        return suggestions(get(uri -> uri.path("/movie/{id}/recommendations")
                 .queryParam("language", LANGUAGE)
                 .queryParam("api_key", apiKey)
-                .build(externalId), RecommendationsResponse.class);
+                .build(externalId), MovieListResponse.class));
+    }
+
+    public List<Suggestion> discoverByGenre(int genreId, int page) {
+        return suggestions(get(uri -> uri.path("/discover/movie")
+                .queryParam("with_genres", genreId)
+                .queryParam("sort_by", "popularity.desc")
+                // Popularity alone surfaces obscure catalog noise; require a vote floor.
+                .queryParam("vote_count.gte", 200)
+                .queryParam("page", page)
+                .queryParam("language", LANGUAGE)
+                .queryParam("api_key", apiKey)
+                .build(), MovieListResponse.class));
+    }
+
+    public Map<String, Integer> genreIdsByName() {
+        Map<String, Integer> cached = genreIdsByName;
+        if (cached == null) {
+            GenreListResponse response = get(uri -> uri.path("/genre/movie/list")
+                    .queryParam("language", LANGUAGE)
+                    .queryParam("api_key", apiKey)
+                    .build(), GenreListResponse.class);
+            cached = response == null || response.genres() == null ? Map.of()
+                    : response.genres().stream().collect(Collectors.toUnmodifiableMap(
+                            g -> g.name().toLowerCase(Locale.ROOT), Genre::id, (a, b) -> a));
+            genreIdsByName = cached;
+        }
+        return cached;
+    }
+
+    private static List<Suggestion> suggestions(MovieListResponse response) {
         if (response == null || response.results() == null) {
             return List.of();
         }
         return response.results().stream()
                 .filter(m -> m.title() != null)
-                .map(m -> new MovieSuggestion(SOURCE, String.valueOf(m.id()), m.title(),
+                .map(m -> new Suggestion(SOURCE, String.valueOf(m.id()), m.title(),
                         year(m.releaseDate()), cover(m.posterPath()), m.overview(), m.voteAverage()))
                 .toList();
     }
@@ -107,6 +146,32 @@ public class TmdbClient {
                 .map(CrewMember::name)
                 .collect(Collectors.joining(", "));
         return directors.isEmpty() ? null : directors;
+    }
+
+    private static List<String> flatrateProviders(WatchProviders watchProviders) {
+        if (watchProviders == null || watchProviders.results() == null) {
+            return List.of();
+        }
+        CountryProviders region = watchProviders.results().get(WATCH_REGION);
+        if (region == null || region.flatrate() == null) {
+            return List.of();
+        }
+        return region.flatrate().stream()
+                .map(Provider::providerName)
+                .filter(Objects::nonNull)
+                .map(TmdbClient::normalizeProvider)
+                .distinct()
+                .toList();
+    }
+
+    // TMDB lists ad-tier, Amazon-channel and add-on package variants as separate
+    // providers; collapse them into the base service so the UI shows one badge.
+    private static String normalizeProvider(String name) {
+        return name.trim()
+                .replaceFirst("\\s+(Standard )?with Ads$", "")
+                .replaceFirst("\\s+Amazon Channels?$", "")
+                .replaceFirst("\\s+Ficción Total$", "")
+                .trim();
     }
 
     private static Integer year(String releaseDate) {
@@ -147,21 +212,34 @@ public class TmdbClient {
                                @JsonProperty("poster_path") String posterPath,
                                Integer runtime,
                                List<Genre> genres,
-                               Credits credits) {
+                               Credits credits,
+                               @JsonProperty("watch/providers") WatchProviders watchProviders) {
     }
 
-    private record RecommendationsResponse(List<RecommendedMovie> results) {
+    private record WatchProviders(Map<String, CountryProviders> results) {
     }
 
-    private record RecommendedMovie(long id,
-                                    String title,
-                                    @JsonProperty("release_date") String releaseDate,
-                                    @JsonProperty("poster_path") String posterPath,
-                                    String overview,
-                                    @JsonProperty("vote_average") Double voteAverage) {
+    private record CountryProviders(List<Provider> flatrate) {
     }
 
-    private record Genre(String name) {
+    private record Provider(@JsonProperty("provider_name") String providerName) {
+    }
+
+    private record MovieListResponse(List<ListedMovie> results) {
+    }
+
+    private record ListedMovie(long id,
+                               String title,
+                               @JsonProperty("release_date") String releaseDate,
+                               @JsonProperty("poster_path") String posterPath,
+                               String overview,
+                               @JsonProperty("vote_average") Double voteAverage) {
+    }
+
+    private record GenreListResponse(List<Genre> genres) {
+    }
+
+    private record Genre(int id, String name) {
     }
 
     private record Credits(List<CrewMember> crew) {

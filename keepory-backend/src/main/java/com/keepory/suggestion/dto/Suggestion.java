@@ -1,6 +1,6 @@
 package com.keepory.suggestion.dto;
 
-public record MovieSuggestion(
+public record Suggestion(
         String source,
         String externalId,
         String title,
