@@ -22,3 +22,10 @@ services:
         sync: false
       - key: GOOGLE_BOOKS_API_KEY
         sync: false
+      # Owner account, created on first boot if it does not exist yet.
+      - key: KEEPORY_ADMIN_EMAIL
+        sync: false
+      - key: KEEPORY_ADMIN_PASSWORD
+        sync: false
+      - key: KEEPORY_ADMIN_NAME
+        sync: false

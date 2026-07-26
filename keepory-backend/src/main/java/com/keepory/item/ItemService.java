@@ -1,5 +1,6 @@
 package com.keepory.item;
 
+import com.keepory.auth.CurrentUser;
 import com.keepory.item.dto.ItemRequest;
 import com.keepory.item.dto.ItemResponse;
 import jakarta.persistence.EntityExistsException;
@@ -19,9 +20,11 @@ import java.util.UUID;
 public class ItemService {
 
     private final ItemRepository repository;
+    private final CurrentUser currentUser;
 
-    public ItemService(ItemRepository repository) {
+    public ItemService(ItemRepository repository, CurrentUser currentUser) {
         this.repository = repository;
+        this.currentUser = currentUser;
     }
 
     @Transactional(readOnly = true)
@@ -32,6 +35,7 @@ public class ItemService {
         // The native query defines its own order; drop any sort carried by the Pageable.
         Pageable page = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
         return repository.search(
+                currentUser.id().toString(),
                 type == null ? null : type.name(),
                 status == null ? null : status.name(),
                 query, sortKey,
@@ -46,18 +50,21 @@ public class ItemService {
     }
 
     public ItemResponse create(ItemRequest request) {
+        UUID userId = currentUser.id();
         UUID id = request.id() != null ? request.id() : UUID.randomUUID();
         if (repository.existsById(id)) {
             throw new EntityExistsException("Item %s already exists".formatted(id));
         }
+        // Duplicate check is per user: the same film in two libraries is not a clash.
         if (request.source() != null && request.externalId() != null
-                && repository.existsByTypeAndSourceAndExternalIdAndDeletedAtIsNull(
-                        request.type(), request.source(), request.externalId())) {
+                && repository.existsByTypeAndSourceAndExternalIdAndUserIdAndDeletedAtIsNull(
+                        request.type(), request.source(), request.externalId(), userId)) {
             throw new EntityExistsException(
                     "Item from %s with external id %s already exists".formatted(request.source(), request.externalId()));
         }
         Item item = new Item();
         item.setId(id);
+        item.setUserId(userId);
         apply(item, request);
         // Flush so Hibernate populates createdAt/updatedAt before building the response.
         return ItemResponse.from(repository.saveAndFlush(item));
@@ -77,7 +84,8 @@ public class ItemService {
     }
 
     private Item find(UUID id) {
-        return repository.findByIdAndDeletedAtIsNull(id)
+        // Someone else's item is "not found", not "forbidden": a 403 would confirm it exists.
+        return repository.findByIdAndUserIdAndDeletedAtIsNull(id, currentUser.id())
                 .orElseThrow(() -> new EntityNotFoundException("Item %s not found".formatted(id)));
     }
 

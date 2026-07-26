@@ -27,6 +27,10 @@ public class Collection {
     @Id
     private UUID id;
 
+    // Owner. Set once on creation and never sent by the client.
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private UUID userId;
+
     @Column(nullable = false, length = 120)
     private String name;
 
@@ -56,6 +60,14 @@ public class Collection {
 
     public void setId(UUID id) {
         this.id = id;
+    }
+
+    public UUID getUserId() {
+        return userId;
+    }
+
+    public void setUserId(UUID userId) {
+        this.userId = userId;
     }
 
     public String getName() {

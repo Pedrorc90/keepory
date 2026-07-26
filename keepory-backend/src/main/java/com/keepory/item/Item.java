@@ -25,6 +25,10 @@ public class Item {
     @Id
     private UUID id;
 
+    // Owner. Set once on creation and never sent by the client.
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private UUID userId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ItemType type;
@@ -73,6 +77,14 @@ public class Item {
 
     public void setId(UUID id) {
         this.id = id;
+    }
+
+    public UUID getUserId() {
+        return userId;
+    }
+
+    public void setUserId(UUID userId) {
+        this.userId = userId;
     }
 
     public ItemType getType() {

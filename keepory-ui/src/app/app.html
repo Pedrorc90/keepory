@@ -1,15 +1,26 @@
 <div class="flex min-h-dvh flex-col">
+  <!-- Chrome only exists for a signed-in user; /login renders bare. -->
+  @if (user()) {
   <header class="border-b border-line">
     <div class="mx-auto flex w-full sm:max-w-[92%] items-baseline gap-3 px-4 py-4">
       <a routerLink="/items" class="font-display text-2xl font-semibold tracking-tight">
-        Keepory<span class="text-amber">.</span>
+        <img
+          src="logo.png"
+          alt=""
+          class="mr-1.5 inline-block h-7 w-auto align-[-0.18em]"
+        />Keepory<span class="text-amber">.</span>
       </a>
       <span class="hidden text-sm text-muted sm:inline">lo visto, lo leído, lo vivido</span>
       <nav class="ml-auto flex items-center gap-4 text-sm">
         <a routerLink="/suggestions" routerLinkActive="text-amber" class="text-muted transition hover:text-paper">Sugerencias</a>
+        @if (user(); as current) {
+          <span class="hidden text-muted sm:inline">{{ current.displayName }}</span>
+          <button (click)="logout()" class="text-muted transition hover:text-paper">Salir</button>
+        }
       </nav>
     </div>
   </header>
+  }
   <ng-template #newCollection let-type>
     @if (creatingFor() === type) {
       <div class="shrink-0 py-1 md:ml-3.5 md:border-l md:border-l-line md:pl-3">
@@ -125,6 +136,7 @@
   </ng-template>
 
   <div class="mx-auto flex w-full flex-1 flex-col gap-8 px-4 py-8 sm:max-w-[92%] md:flex-row">
+    @if (user()) {
     <aside class="md:w-64 md:shrink-0">
       <div class="rounded-xl border border-line bg-panel/50 p-2 md:sticky md:top-8">
         <p class="mb-1 hidden px-3 pt-2 font-display text-xs uppercase tracking-[0.2em] text-muted md:block">
@@ -221,14 +233,17 @@
         }
       </div>
     </aside>
+    }
     <main class="min-w-0 flex-1">
       <router-outlet />
     </main>
   </div>
+  @if (user()) {
   <footer class="border-t border-line">
     <div class="mx-auto w-full sm:max-w-[92%] px-4 py-3 text-xs text-muted">
       This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability data provided by
       JustWatch. Book covers courtesy of Open Library.
     </div>
   </footer>
+  }
 </div>

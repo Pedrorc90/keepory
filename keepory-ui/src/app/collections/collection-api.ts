@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, effect, inject, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
+import { AuthApi } from '../auth/auth-api';
 import { ItemType } from '../items/item.model';
 
 export interface Collection {
@@ -16,6 +17,7 @@ export interface Collection {
 @Injectable({ providedIn: 'root' })
 export class CollectionApi {
   private readonly http = inject(HttpClient);
+  private readonly auth = inject(AuthApi);
   private readonly baseUrl = '/api/collections';
 
   // Single cached list: the sidebar, the list picker and the form all read from it.
@@ -23,7 +25,12 @@ export class CollectionApi {
   readonly all = this.state.asReadonly();
 
   constructor() {
-    this.refresh();
+    // The sidebar belongs to whoever is logged in: load on login, empty on logout.
+    // Fetching in the constructor instead would 401 before anyone has signed in.
+    effect(() => {
+      if (this.auth.user()) this.refresh();
+      else this.state.set([]);
+    });
   }
 
   refresh(): void {

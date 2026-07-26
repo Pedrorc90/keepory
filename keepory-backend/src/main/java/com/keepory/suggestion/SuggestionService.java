@@ -1,5 +1,6 @@
 package com.keepory.suggestion;
 
+import com.keepory.auth.CurrentUser;
 import com.keepory.item.Item;
 import com.keepory.item.ItemRepository;
 import com.keepory.item.ItemStatus;
@@ -49,17 +50,20 @@ public class SuggestionService {
     private final SuggestionDismissalRepository dismissals;
     private final TmdbClient tmdb;
     private final GoogleBooksClient googleBooks;
+    private final CurrentUser currentUser;
 
     public SuggestionService(ItemRepository items, SuggestionDismissalRepository dismissals,
-                             TmdbClient tmdb, GoogleBooksClient googleBooks) {
+                             TmdbClient tmdb, GoogleBooksClient googleBooks, CurrentUser currentUser) {
         this.items = items;
         this.dismissals = dismissals;
         this.tmdb = tmdb;
         this.googleBooks = googleBooks;
+        this.currentUser = currentUser;
     }
 
     public List<SuggestionDeck> movieDecks() {
-        List<Item> movies = items.findByTypeAndSourceAndDeletedAtIsNull(ItemType.MOVIE, TmdbClient.SOURCE);
+        List<Item> movies = items.findByTypeAndSourceAndUserIdAndDeletedAtIsNull(
+                ItemType.MOVIE, TmdbClient.SOURCE, currentUser.id());
         // Grows as decks fill so each movie is suggested in a single deck.
         Set<String> excluded = baseExclusions(movies);
 
@@ -82,7 +86,8 @@ public class SuggestionService {
     // it cannot see what the other rows currently show, so cross-row repeats
     // are possible.
     public SuggestionDeck movieDeck(String deckId) {
-        List<Item> movies = items.findByTypeAndSourceAndDeletedAtIsNull(ItemType.MOVIE, TmdbClient.SOURCE);
+        List<Item> movies = items.findByTypeAndSourceAndUserIdAndDeletedAtIsNull(
+                ItemType.MOVIE, TmdbClient.SOURCE, currentUser.id());
         Set<String> excluded = baseExclusions(movies);
         return switch (deckId) {
             case "completed" -> new SuggestionDeck(deckId, COMPLETED_TITLE,
@@ -189,7 +194,7 @@ public class SuggestionService {
     }
 
     public List<Suggestion> books() {
-        List<Item> books = items.findByTypeAndDeletedAtIsNull(ItemType.BOOK);
+        List<Item> books = items.findByTypeAndUserIdAndDeletedAtIsNull(ItemType.BOOK, currentUser.id());
         Set<String> inCollection = books.stream()
                 .filter(i -> GoogleBooksClient.SOURCE.equals(i.getSource()))
                 .map(Item::getExternalId)
@@ -242,7 +247,7 @@ public class SuggestionService {
     }
 
     public void dismiss(String source, String externalId) {
-        dismissals.save(new SuggestionDismissal(source, externalId));
+        dismissals.save(new SuggestionDismissal(currentUser.id(), source, externalId));
     }
 
     private static void collect(List<Suggestion> found, Map<String, Suggestion> byId,
@@ -259,7 +264,7 @@ public class SuggestionService {
     private Set<String> dismissed(String source) {
         // Dismissals expire after a cooldown so discarded suggestions can resurface.
         OffsetDateTime cutoff = OffsetDateTime.now().minusDays(DISMISSAL_COOLDOWN_DAYS);
-        return dismissals.findBySourceAndDismissedAtAfter(source, cutoff).stream()
+        return dismissals.findByUserIdAndSourceAndDismissedAtAfter(currentUser.id(), source, cutoff).stream()
                 .map(SuggestionDismissal::getExternalId)
                 .collect(Collectors.toSet());
     }

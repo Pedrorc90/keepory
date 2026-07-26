@@ -9,6 +9,7 @@ import {
   RouterLinkActive,
   RouterOutlet,
 } from '@angular/router';
+import { AuthApi } from './auth/auth-api';
 import { Collection, CollectionApi } from './collections/collection-api';
 import { DragState } from './collections/drag-state';
 import { ItemType } from './items/item.model';
@@ -24,6 +25,10 @@ export class App {
   private readonly drag = inject(DragState);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly auth = inject(AuthApi);
+
+  // Drives the chrome: no user means the login screen renders on its own.
+  readonly user = this.auth.user;
 
   readonly movieCollections = computed(() => this.collections.forType('MOVIE'));
   readonly bookCollections = computed(() => this.collections.forType('BOOK'));
@@ -63,6 +68,14 @@ export class App {
     fragment: 'ignored',
     matrixParams: 'ignored',
   };
+
+  logout(): void {
+    // Navigate either way: a failed logout still means the user wants out.
+    this.auth.logout().subscribe({
+      next: () => this.router.navigate(['/login']),
+      error: () => this.router.navigate(['/login']),
+    });
+  }
 
   isCollapsed(type: ItemType): boolean {
     return this.collapsed().has(type);

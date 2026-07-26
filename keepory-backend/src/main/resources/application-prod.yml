@@ -1,5 +1,10 @@
 server:
   port: ${PORT:8080}
+  servlet:
+    session:
+      cookie:
+        # Render terminates TLS, so the cookie must never travel over plain HTTP.
+        secure: true
   compression:
     enabled: true
     mime-types: text/html,text/css,application/javascript,application/json,image/svg+xml

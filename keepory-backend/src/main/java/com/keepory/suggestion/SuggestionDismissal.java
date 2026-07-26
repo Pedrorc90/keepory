@@ -9,11 +9,18 @@ import jakarta.persistence.Table;
 import java.io.Serializable;
 import java.time.OffsetDateTime;
 import java.util.Objects;
+import java.util.UUID;
 
 @Entity
 @Table(name = "suggestion_dismissal")
 @IdClass(SuggestionDismissal.Key.class)
 public class SuggestionDismissal {
+
+    // Part of the key: a dismissal is personal, so the same film can be
+    // dismissed by one user and still suggested to another.
+    @Id
+    @Column(name = "user_id")
+    private UUID userId;
 
     @Id
     @Column(length = 20)
@@ -29,9 +36,14 @@ public class SuggestionDismissal {
     protected SuggestionDismissal() {
     }
 
-    public SuggestionDismissal(String source, String externalId) {
+    public SuggestionDismissal(UUID userId, String source, String externalId) {
+        this.userId = userId;
         this.source = source;
         this.externalId = externalId;
+    }
+
+    public UUID getUserId() {
+        return userId;
     }
 
     public String getSource() {
@@ -48,13 +60,15 @@ public class SuggestionDismissal {
 
     public static class Key implements Serializable {
 
+        private UUID userId;
         private String source;
         private String externalId;
 
         public Key() {
         }
 
-        public Key(String source, String externalId) {
+        public Key(UUID userId, String source, String externalId) {
+            this.userId = userId;
             this.source = source;
             this.externalId = externalId;
         }
@@ -62,13 +76,14 @@ public class SuggestionDismissal {
         @Override
         public boolean equals(Object o) {
             return o instanceof Key other
+                    && Objects.equals(userId, other.userId)
                     && Objects.equals(source, other.source)
                     && Objects.equals(externalId, other.externalId);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(source, externalId);
+            return Objects.hash(userId, source, externalId);
         }
     }
 }

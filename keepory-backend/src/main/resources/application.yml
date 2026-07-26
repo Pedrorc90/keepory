@@ -9,12 +9,29 @@ spring:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+  session:
+    store-type: jdbc
+    jdbc:
+      # Flyway owns the SPRING_SESSION tables (V7).
+      initialize-schema: never
 
 server:
   port: 8080
+  servlet:
+    session:
+      # Long-lived on purpose: this is a personal library, not a bank.
+      timeout: 30d
+      cookie:
+        http-only: true
+        # Lax is what makes disabling CSRF safe: a cross-site POST carries no cookie.
+        same-site: lax
 
 keepory:
   tmdb:
     api-key: ${TMDB_API_KEY:}
   google-books:
     api-key: ${GOOGLE_BOOKS_API_KEY:}
+  admin:
+    email: ${KEEPORY_ADMIN_EMAIL:}
+    password: ${KEEPORY_ADMIN_PASSWORD:}
+    display-name: ${KEEPORY_ADMIN_NAME:}

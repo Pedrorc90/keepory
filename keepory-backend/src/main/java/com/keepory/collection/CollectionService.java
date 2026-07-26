@@ -1,5 +1,6 @@
 package com.keepory.collection;
 
+import com.keepory.auth.CurrentUser;
 import com.keepory.collection.dto.CollectionRequest;
 import com.keepory.collection.dto.CollectionResponse;
 import com.keepory.item.Item;
@@ -21,23 +22,27 @@ public class CollectionService {
 
     private final CollectionRepository repository;
     private final ItemRepository itemRepository;
+    private final CurrentUser currentUser;
 
-    public CollectionService(CollectionRepository repository, ItemRepository itemRepository) {
+    public CollectionService(CollectionRepository repository, ItemRepository itemRepository,
+                             CurrentUser currentUser) {
         this.repository = repository;
         this.itemRepository = itemRepository;
+        this.currentUser = currentUser;
     }
 
     @Transactional(readOnly = true)
     public List<CollectionResponse> list(ItemType type) {
+        UUID userId = currentUser.id();
         // A typed filter also returns the untyped ones: those accept any item.
         List<Collection> collections = type == null
-                ? repository.findAllByOrderByNameAsc()
-                : repository.findByTypeIsNullOrTypeOrderByNameAsc(type);
-        Map<UUID, Long> counts = repository.countItems().stream()
+                ? repository.findByUserIdOrderByNameAsc(userId)
+                : repository.findVisibleForType(userId, type);
+        Map<UUID, Long> counts = repository.countItems(userId.toString()).stream()
                 .collect(Collectors.toMap(
                         CollectionRepository.CollectionCount::getCollectionId,
                         CollectionRepository.CollectionCount::getTotal));
-        Map<UUID, List<String>> covers = repository.findCovers().stream()
+        Map<UUID, List<String>> covers = repository.findCovers(userId.toString()).stream()
                 .collect(Collectors.groupingBy(
                         CollectionRepository.CollectionCover::getCollectionId,
                         Collectors.mapping(CollectionRepository.CollectionCover::getCoverUrl, Collectors.toList())));
@@ -50,12 +55,14 @@ public class CollectionService {
     }
 
     public CollectionResponse create(CollectionRequest request) {
+        UUID userId = currentUser.id();
         String name = request.name().trim();
-        if (repository.existsByNameIgnoreCaseAndType(name, request.type())) {
+        if (repository.existsByNameIgnoreCaseAndTypeAndUserId(name, request.type(), userId)) {
             throw new EntityExistsException("Collection %s already exists".formatted(name));
         }
         Collection collection = new Collection();
         collection.setId(UUID.randomUUID());
+        collection.setUserId(userId);
         collection.setName(name);
         collection.setType(request.type());
         return CollectionResponse.from(repository.saveAndFlush(collection), 0);
@@ -67,11 +74,11 @@ public class CollectionService {
         Collection collection = find(id);
         String name = rawName.trim();
         if (!collection.getName().equalsIgnoreCase(name)
-                && repository.existsByNameIgnoreCaseAndType(name, collection.getType())) {
+                && repository.existsByNameIgnoreCaseAndTypeAndUserId(name, collection.getType(), currentUser.id())) {
             throw new EntityExistsException("Collection %s already exists".formatted(name));
         }
         collection.setName(name);
-        long items = repository.countItems().stream()
+        long items = repository.countItems(currentUser.id().toString()).stream()
                 .filter(count -> count.getCollectionId().equals(id))
                 .mapToLong(CollectionRepository.CollectionCount::getTotal)
                 .findFirst()
@@ -86,7 +93,8 @@ public class CollectionService {
 
     public void addItem(UUID collectionId, UUID itemId) {
         Collection collection = find(collectionId);
-        Item item = itemRepository.findByIdAndDeletedAtIsNull(itemId)
+        // Scoped too: you cannot drop someone else's item into your own collection.
+        Item item = itemRepository.findByIdAndUserIdAndDeletedAtIsNull(itemId, currentUser.id())
                 .orElseThrow(() -> new EntityNotFoundException("Item %s not found".formatted(itemId)));
         if (collection.getType() != null && collection.getType() != item.getType()) {
             throw new IllegalArgumentException(
@@ -101,19 +109,20 @@ public class CollectionService {
 
     @Transactional(readOnly = true)
     public List<UUID> collectionIdsOf(UUID itemId) {
-        return repository.findIdsByItemId(itemId);
+        return repository.findIdsByItemId(itemId, currentUser.id());
     }
 
     public void setItemCollections(UUID itemId, List<UUID> collectionIds) {
         // A missing body means "no collections", not an error.
         List<UUID> target = collectionIds == null ? List.of() : collectionIds;
-        List<UUID> current = repository.findIdsByItemId(itemId);
+        List<UUID> current = repository.findIdsByItemId(itemId, currentUser.id());
         current.stream().filter(id -> !target.contains(id)).forEach(id -> removeItem(id, itemId));
         target.stream().filter(id -> !current.contains(id)).forEach(id -> addItem(id, itemId));
     }
 
     private Collection find(UUID id) {
-        return repository.findById(id)
+        // Someone else's collection reads as missing, never as forbidden.
+        return repository.findByIdAndUserId(id, currentUser.id())
                 .orElseThrow(() -> new EntityNotFoundException("Collection %s not found".formatted(id)));
     }
 }
