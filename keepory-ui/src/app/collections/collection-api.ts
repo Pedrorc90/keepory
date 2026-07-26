@@ -43,6 +43,12 @@ export class CollectionApi {
     return this.http.post<Collection>(this.baseUrl, { name, type }).pipe(tap(() => this.refresh()));
   }
 
+  rename(id: string, name: string): Observable<Collection> {
+    return this.http
+      .put<Collection>(`${this.baseUrl}/${id}`, { name })
+      .pipe(tap(() => this.refresh()));
+  }
+
   delete(id: string): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/${id}`).pipe(tap(() => this.refresh()));
   }

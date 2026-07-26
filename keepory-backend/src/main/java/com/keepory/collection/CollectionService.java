@@ -44,7 +44,7 @@ public class CollectionService {
 
     public CollectionResponse create(CollectionRequest request) {
         String name = request.name().trim();
-        if (repository.existsByNameIgnoreCase(name)) {
+        if (repository.existsByNameIgnoreCaseAndType(name, request.type())) {
             throw new EntityExistsException("Collection %s already exists".formatted(name));
         }
         Collection collection = new Collection();
@@ -52,6 +52,24 @@ public class CollectionService {
         collection.setName(name);
         collection.setType(request.type());
         return CollectionResponse.from(repository.saveAndFlush(collection), 0);
+    }
+
+    // Only the name changes: the type is immutable, switching it would leave
+    // items of the wrong type inside the collection.
+    public CollectionResponse rename(UUID id, String rawName) {
+        Collection collection = find(id);
+        String name = rawName.trim();
+        if (!collection.getName().equalsIgnoreCase(name)
+                && repository.existsByNameIgnoreCaseAndType(name, collection.getType())) {
+            throw new EntityExistsException("Collection %s already exists".formatted(name));
+        }
+        collection.setName(name);
+        long items = repository.countItems().stream()
+                .filter(count -> count.getCollectionId().equals(id))
+                .mapToLong(CollectionRepository.CollectionCount::getTotal)
+                .findFirst()
+                .orElse(0L);
+        return CollectionResponse.from(repository.saveAndFlush(collection), items);
     }
 
     public void delete(UUID id) {
@@ -80,9 +98,11 @@ public class CollectionService {
     }
 
     public void setItemCollections(UUID itemId, List<UUID> collectionIds) {
+        // A missing body means "no collections", not an error.
+        List<UUID> target = collectionIds == null ? List.of() : collectionIds;
         List<UUID> current = repository.findIdsByItemId(itemId);
-        current.stream().filter(id -> !collectionIds.contains(id)).forEach(id -> removeItem(id, itemId));
-        collectionIds.stream().filter(id -> !current.contains(id)).forEach(id -> addItem(id, itemId));
+        current.stream().filter(id -> !target.contains(id)).forEach(id -> removeItem(id, itemId));
+        target.stream().filter(id -> !current.contains(id)).forEach(id -> addItem(id, itemId));
     }
 
     private Collection find(UUID id) {

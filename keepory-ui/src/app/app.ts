@@ -1,7 +1,14 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { NgTemplateOutlet } from '@angular/common';
 import { Component, computed, effect, inject, signal } from '@angular/core';
-import { IsActiveMatchOptions, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import {
+  ActivatedRoute,
+  IsActiveMatchOptions,
+  Router,
+  RouterLink,
+  RouterLinkActive,
+  RouterOutlet,
+} from '@angular/router';
 import { Collection, CollectionApi } from './collections/collection-api';
 import { DragState } from './collections/drag-state';
 import { ItemType } from './items/item.model';
@@ -15,6 +22,8 @@ import { ItemType } from './items/item.model';
 export class App {
   private readonly collections = inject(CollectionApi);
   private readonly drag = inject(DragState);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   readonly movieCollections = computed(() => this.collections.forType('MOVIE'));
   readonly bookCollections = computed(() => this.collections.forType('BOOK'));
@@ -29,6 +38,11 @@ export class App {
   readonly createError = signal<string | null>(null);
   // Guards against the double submit of Enter followed by blur on the same input.
   private readonly creating = signal(false);
+
+  // Collection being renamed inline, if any.
+  readonly renamingId = signal<string | null>(null);
+  readonly renameError = signal<string | null>(null);
+  private readonly renaming = signal(false);
 
   constructor() {
     // A new drag clears the error left by the previous one.
@@ -55,6 +69,63 @@ export class App {
   cancelCreate(): void {
     this.creatingFor.set(null);
     this.createError.set(null);
+  }
+
+  startRename(collection: Collection): void {
+    this.renamingId.set(collection.id);
+    this.renameError.set(null);
+    setTimeout(() => {
+      const input = document.getElementById('rename-collection-input') as HTMLInputElement | null;
+      input?.focus();
+      input?.select();
+    });
+  }
+
+  cancelRename(): void {
+    this.renamingId.set(null);
+    this.renameError.set(null);
+  }
+
+  renameCollection(collection: Collection, input: HTMLInputElement): void {
+    if (this.renaming()) return;
+    const name = input.value.trim();
+    if (!name || name === collection.name) {
+      this.cancelRename();
+      return;
+    }
+    this.renameError.set(null);
+    this.renaming.set(true);
+    this.collections.rename(collection.id, name).subscribe({
+      next: () => {
+        this.renaming.set(false);
+        this.renamingId.set(null);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.renaming.set(false);
+        this.renameError.set(
+          err.status === 409 ? 'Ya existe una colección con ese nombre en esta sección.' : 'No se pudo renombrar.',
+        );
+      },
+    });
+  }
+
+  deleteCollection(collection: Collection): void {
+    const message = `¿Borrar la colección «${collection.name}»? Los ${collection.itemCount} items que contiene no se borran.`;
+    if (!confirm(message)) return;
+    this.collections.delete(collection.id).subscribe({
+      next: () => {
+        // The filter in the URL would point at a collection that no longer exists.
+        if (this.route.snapshot.queryParamMap.get('collection') === collection.id) {
+          this.router.navigate([this.routeForType(collection.type)]);
+        }
+      },
+      error: () => this.dropError.set(`No se pudo borrar ${collection.name}.`),
+    });
+  }
+
+  private routeForType(type: ItemType | null): string {
+    if (type === 'MOVIE') return '/movies';
+    return type === 'BOOK' ? '/books' : '/items';
   }
 
   /** A typed collection only takes its own item type; an untyped one takes anything. */
@@ -107,7 +178,7 @@ export class App {
       error: (err: HttpErrorResponse) => {
         this.creating.set(false);
         this.createError.set(
-          err.status === 409 ? 'Ya existe una colección con ese nombre.' : 'No se pudo crear.',
+          err.status === 409 ? 'Ya existe una colección con ese nombre en esta sección.' : 'No se pudo crear.',
         );
       },
     });

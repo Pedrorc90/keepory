@@ -40,6 +40,12 @@ public class CollectionController {
         return service.create(request);
     }
 
+    // Renames only: the type sent in the body is ignored.
+    @PutMapping("/collections/{id}")
+    public CollectionResponse rename(@PathVariable UUID id, @Valid @RequestBody CollectionRequest request) {
+        return service.rename(id, request.name());
+    }
+
     @DeleteMapping("/collections/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID id) {
@@ -66,7 +72,8 @@ public class CollectionController {
 
     @PutMapping("/items/{itemId}/collections")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void setCollections(@PathVariable UUID itemId, @RequestBody List<UUID> collectionIds) {
+    public void setCollections(@PathVariable UUID itemId,
+                               @RequestBody(required = false) List<UUID> collectionIds) {
         service.setItemCollections(itemId, collectionIds);
     }
 }

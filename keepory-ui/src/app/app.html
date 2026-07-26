@@ -37,6 +37,70 @@
     }
   </ng-template>
 
+  <ng-template #collectionRow let-collection let-link="link" let-active="active">
+    @if (renamingId() === collection.id) {
+      <div class="shrink-0 py-1 md:ml-3.5 md:border-l md:border-l-line md:pl-3">
+        <input
+          id="rename-collection-input"
+          [value]="collection.name"
+          (keydown.enter)="renameCollection(collection, $any($event.target))"
+          (keydown.escape)="cancelRename()"
+          (blur)="renameCollection(collection, $any($event.target))"
+          maxlength="120"
+          class="w-full min-w-40 rounded-md border border-amber/60 bg-ink px-2.5 py-1.5 text-sm focus:outline-none"
+          aria-label="Nuevo nombre de la colección"
+        />
+        @if (renameError()) {
+          <span class="mt-1 block text-xs text-rust">{{ renameError() }}</span>
+        }
+      </div>
+    } @else {
+      <div class="group/row relative flex shrink-0 items-center md:ml-3.5 md:border-l md:border-l-line md:pl-3">
+        <a
+          [routerLink]="link"
+          [queryParams]="{ collection: collection.id }"
+          [routerLinkActive]="active"
+          [routerLinkActiveOptions]="exactMatch"
+          draggable="false"
+          (dragover)="onDragOver($event, collection)"
+          (dragleave)="onDragLeave(collection)"
+          (drop)="onDrop($event, collection)"
+          [class.drop-ready]="acceptsDrag(collection)"
+          [class.drop-target]="dropTarget() === collection.id"
+          class="flex w-full items-center gap-2 rounded-lg border border-transparent py-1.5 pl-4 pr-3 text-sm text-muted transition hover:bg-paper/5 hover:text-paper md:pl-3"
+        >
+          <span class="truncate">{{ collection.name }}</span>
+          <span class="ml-auto hidden text-xs text-muted/70 md:inline md:group-hover/row:invisible">
+            {{ collection.itemCount }}
+          </span>
+        </a>
+        <!-- Hidden mid-drag so the buttons never swallow the drop. -->
+        @if (!draggedItem()) {
+          <span
+            class="absolute right-2 flex items-center gap-0.5 md:invisible md:group-hover/row:visible md:focus-within:visible"
+          >
+            <button
+              (click)="startRename(collection)"
+              class="rounded p-1 text-xs text-muted transition hover:bg-paper/10 hover:text-amber"
+              [attr.aria-label]="'Renombrar ' + collection.name"
+              title="Renombrar"
+            >
+              ✎
+            </button>
+            <button
+              (click)="deleteCollection(collection)"
+              class="rounded p-1 text-xs text-muted transition hover:bg-paper/10 hover:text-rust"
+              [attr.aria-label]="'Borrar ' + collection.name"
+              title="Borrar"
+            >
+              ✕
+            </button>
+          </span>
+        }
+      </div>
+    }
+  </ng-template>
+
   <div class="mx-auto flex w-full flex-1 flex-col gap-8 px-4 py-8 sm:max-w-[92%] md:flex-row">
     <aside class="md:w-64 md:shrink-0">
       <div class="rounded-xl border border-line bg-panel/50 p-2 md:sticky md:top-8">
@@ -76,22 +140,14 @@
             Películas
           </a>
           @for (collection of movieCollections(); track collection.id) {
-            <a
-              routerLink="/movies"
-              [queryParams]="{ collection: collection.id }"
-              routerLinkActive="!border-rust/50 !bg-rust/10 !text-paper"
-              [routerLinkActiveOptions]="exactMatch"
-              draggable="false"
-              (dragover)="onDragOver($event, collection)"
-              (dragleave)="onDragLeave(collection)"
-              (drop)="onDrop($event, collection)"
-              [class.drop-ready]="acceptsDrag(collection)"
-              [class.drop-target]="dropTarget() === collection.id"
-              class="flex shrink-0 items-center gap-2 rounded-lg border border-transparent py-1.5 pl-4 pr-3 text-sm text-muted transition hover:bg-paper/5 hover:text-paper md:ml-3.5 md:border-l md:border-l-line md:pl-3"
-            >
-              <span class="truncate">{{ collection.name }}</span>
-              <span class="ml-auto text-xs text-muted/70">{{ collection.itemCount }}</span>
-            </a>
+            <ng-container
+              [ngTemplateOutlet]="collectionRow"
+              [ngTemplateOutletContext]="{
+                $implicit: collection,
+                link: '/movies',
+                active: '!border-rust/50 !bg-rust/10 !text-paper'
+              }"
+            />
           }
           <ng-container [ngTemplateOutlet]="newCollection" [ngTemplateOutletContext]="{ $implicit: 'MOVIE' }" />
           <a
@@ -106,22 +162,14 @@
             Libros
           </a>
           @for (collection of bookCollections(); track collection.id) {
-            <a
-              routerLink="/books"
-              [queryParams]="{ collection: collection.id }"
-              routerLinkActive="!border-moss/50 !bg-moss/10 !text-paper"
-              [routerLinkActiveOptions]="exactMatch"
-              draggable="false"
-              (dragover)="onDragOver($event, collection)"
-              (dragleave)="onDragLeave(collection)"
-              (drop)="onDrop($event, collection)"
-              [class.drop-ready]="acceptsDrag(collection)"
-              [class.drop-target]="dropTarget() === collection.id"
-              class="flex shrink-0 items-center gap-2 rounded-lg border border-transparent py-1.5 pl-4 pr-3 text-sm text-muted transition hover:bg-paper/5 hover:text-paper md:ml-3.5 md:border-l md:border-l-line md:pl-3"
-            >
-              <span class="truncate">{{ collection.name }}</span>
-              <span class="ml-auto text-xs text-muted/70">{{ collection.itemCount }}</span>
-            </a>
+            <ng-container
+              [ngTemplateOutlet]="collectionRow"
+              [ngTemplateOutletContext]="{
+                $implicit: collection,
+                link: '/books',
+                active: '!border-moss/50 !bg-moss/10 !text-paper'
+              }"
+            />
           }
           <ng-container [ngTemplateOutlet]="newCollection" [ngTemplateOutletContext]="{ $implicit: 'BOOK' }" />
         </nav>

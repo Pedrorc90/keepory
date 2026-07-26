@@ -14,7 +14,8 @@ public interface CollectionRepository extends JpaRepository<Collection, UUID> {
 
     List<Collection> findByTypeIsNullOrTypeOrderByNameAsc(ItemType type);
 
-    boolean existsByNameIgnoreCase(String name);
+    // Scoped to the type: the same name is free in each section of the sidebar.
+    boolean existsByNameIgnoreCaseAndType(String name, ItemType type);
 
     @Query("select c.id from Collection c join c.items i where i.id = :itemId and i.deletedAt is null")
     List<UUID> findIdsByItemId(@Param("itemId") UUID itemId);
