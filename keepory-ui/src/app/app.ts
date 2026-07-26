@@ -28,6 +28,10 @@ export class App {
   readonly movieCollections = computed(() => this.collections.forType('MOVIE'));
   readonly bookCollections = computed(() => this.collections.forType('BOOK'));
 
+  // Sections the user folded away, kept across reloads.
+  private readonly collapsedKey = 'keepory.sidebar.collapsed';
+  private readonly collapsed = signal<ReadonlySet<ItemType>>(this.readCollapsed());
+
   // Collection currently under the pointer while dragging, and the last drop error.
   readonly dropTarget = signal<string | null>(null);
   readonly dropError = signal<string | null>(null);
@@ -59,6 +63,40 @@ export class App {
     fragment: 'ignored',
     matrixParams: 'ignored',
   };
+
+  isCollapsed(type: ItemType): boolean {
+    return this.collapsed().has(type);
+  }
+
+  /** A collapsed section still opens mid-drag, or its collections could not be dropped on. */
+  sectionOpen(type: ItemType): boolean {
+    return !!this.draggedItem() || !this.isCollapsed(type);
+  }
+
+  toggleSection(type: ItemType): void {
+    const next = new Set(this.collapsed());
+    if (!next.delete(type)) next.add(type);
+    this.collapsed.set(next);
+    // A folded section must not keep an input open that nobody can see.
+    if (next.has(type)) {
+      if (this.creatingFor() === type) this.cancelCreate();
+      this.cancelRename();
+    }
+    try {
+      localStorage.setItem(this.collapsedKey, JSON.stringify([...next]));
+    } catch {
+      // Private mode without storage: the fold just does not survive a reload.
+    }
+  }
+
+  private readCollapsed(): ReadonlySet<ItemType> {
+    try {
+      const stored = localStorage.getItem(this.collapsedKey);
+      return new Set(stored ? (JSON.parse(stored) as ItemType[]) : []);
+    } catch {
+      return new Set();
+    }
+  }
 
   startCreate(type: ItemType): void {
     this.creatingFor.set(type);

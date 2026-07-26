@@ -37,6 +37,29 @@
     }
   </ng-template>
 
+  <ng-template #sectionToggle let-type let-label="label" let-count="count">
+    <button
+      (click)="toggleSection(type)"
+      [attr.aria-expanded]="!isCollapsed(type)"
+      [attr.aria-label]="(isCollapsed(type) ? 'Mostrar' : 'Ocultar') + ' las colecciones de ' + label"
+      [title]="isCollapsed(type) ? 'Mostrar colecciones' : 'Ocultar colecciones'"
+      class="flex shrink-0 items-center gap-1 rounded-lg px-2 py-2 text-muted transition hover:bg-paper/5 hover:text-paper"
+    >
+      @if (isCollapsed(type) && count) {
+        <span class="text-xs text-muted/70">{{ count }}</span>
+      }
+      <svg
+        class="h-3 w-3 transition-transform duration-150"
+        [class.-rotate-90]="isCollapsed(type)"
+        viewBox="0 0 12 12"
+        fill="currentColor"
+        aria-hidden="true"
+      >
+        <path d="M6 8.5 1.75 3.75h8.5z" />
+      </svg>
+    </button>
+  </ng-template>
+
   <ng-template #collectionRow let-collection let-link="link" let-active="active">
     @if (renamingId() === collection.id) {
       <div class="shrink-0 py-1 md:ml-3.5 md:border-l md:border-l-line md:pl-3">
@@ -122,56 +145,72 @@
             </svg>
             Todos
           </a>
-          <a
-            routerLink="/movies"
-            routerLinkActive="!border-rust/60 !bg-rust/10 !text-paper"
-            [routerLinkActiveOptions]="exactMatch"
-            class="group flex shrink-0 items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 text-sm text-muted transition hover:bg-paper/5 hover:text-paper"
-          >
-            <svg class="h-4 w-4 text-rust" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <rect x="1" y="2" width="14" height="12" rx="2" />
-              <g fill="rgba(0, 0, 0, 0.45)">
-                <rect x="2.75" y="3.75" width="2" height="2" rx="0.5" />
-                <rect x="2.75" y="10.25" width="2" height="2" rx="0.5" />
-                <rect x="11.25" y="3.75" width="2" height="2" rx="0.5" />
-                <rect x="11.25" y="10.25" width="2" height="2" rx="0.5" />
-              </g>
-            </svg>
-            Películas
-          </a>
-          @for (collection of movieCollections(); track collection.id) {
+          <div class="flex shrink-0 items-center gap-1">
+            <a
+              routerLink="/movies"
+              routerLinkActive="!border-rust/60 !bg-rust/10 !text-paper"
+              [routerLinkActiveOptions]="exactMatch"
+              class="group flex flex-1 shrink-0 items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 text-sm text-muted transition hover:bg-paper/5 hover:text-paper"
+            >
+              <svg class="h-4 w-4 text-rust" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <rect x="1" y="2" width="14" height="12" rx="2" />
+                <g fill="rgba(0, 0, 0, 0.45)">
+                  <rect x="2.75" y="3.75" width="2" height="2" rx="0.5" />
+                  <rect x="2.75" y="10.25" width="2" height="2" rx="0.5" />
+                  <rect x="11.25" y="3.75" width="2" height="2" rx="0.5" />
+                  <rect x="11.25" y="10.25" width="2" height="2" rx="0.5" />
+                </g>
+              </svg>
+              Películas
+            </a>
             <ng-container
-              [ngTemplateOutlet]="collectionRow"
-              [ngTemplateOutletContext]="{
-                $implicit: collection,
-                link: '/movies',
-                active: '!border-rust/50 !bg-rust/10 !text-paper'
-              }"
+              [ngTemplateOutlet]="sectionToggle"
+              [ngTemplateOutletContext]="{ $implicit: 'MOVIE', label: 'películas', count: movieCollections().length }"
             />
+          </div>
+          @if (sectionOpen('MOVIE')) {
+            @for (collection of movieCollections(); track collection.id) {
+              <ng-container
+                [ngTemplateOutlet]="collectionRow"
+                [ngTemplateOutletContext]="{
+                  $implicit: collection,
+                  link: '/movies',
+                  active: '!border-rust/50 !bg-rust/10 !text-paper'
+                }"
+              />
+            }
+            <ng-container [ngTemplateOutlet]="newCollection" [ngTemplateOutletContext]="{ $implicit: 'MOVIE' }" />
           }
-          <ng-container [ngTemplateOutlet]="newCollection" [ngTemplateOutletContext]="{ $implicit: 'MOVIE' }" />
-          <a
-            routerLink="/books"
-            routerLinkActive="!border-moss/60 !bg-moss/10 !text-paper"
-            [routerLinkActiveOptions]="exactMatch"
-            class="group flex shrink-0 items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 text-sm text-muted transition hover:bg-paper/5 hover:text-paper"
-          >
-            <svg class="h-4 w-4 text-moss" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <path d="M3 1.5h10v13l-5-3.6-5 3.6z" />
-            </svg>
-            Libros
-          </a>
-          @for (collection of bookCollections(); track collection.id) {
+          <div class="flex shrink-0 items-center gap-1">
+            <a
+              routerLink="/books"
+              routerLinkActive="!border-moss/60 !bg-moss/10 !text-paper"
+              [routerLinkActiveOptions]="exactMatch"
+              class="group flex flex-1 shrink-0 items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 text-sm text-muted transition hover:bg-paper/5 hover:text-paper"
+            >
+              <svg class="h-4 w-4 text-moss" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M3 1.5h10v13l-5-3.6-5 3.6z" />
+              </svg>
+              Libros
+            </a>
             <ng-container
-              [ngTemplateOutlet]="collectionRow"
-              [ngTemplateOutletContext]="{
-                $implicit: collection,
-                link: '/books',
-                active: '!border-moss/50 !bg-moss/10 !text-paper'
-              }"
+              [ngTemplateOutlet]="sectionToggle"
+              [ngTemplateOutletContext]="{ $implicit: 'BOOK', label: 'libros', count: bookCollections().length }"
             />
+          </div>
+          @if (sectionOpen('BOOK')) {
+            @for (collection of bookCollections(); track collection.id) {
+              <ng-container
+                [ngTemplateOutlet]="collectionRow"
+                [ngTemplateOutletContext]="{
+                  $implicit: collection,
+                  link: '/books',
+                  active: '!border-moss/50 !bg-moss/10 !text-paper'
+                }"
+              />
+            }
+            <ng-container [ngTemplateOutlet]="newCollection" [ngTemplateOutletContext]="{ $implicit: 'BOOK' }" />
           }
-          <ng-container [ngTemplateOutlet]="newCollection" [ngTemplateOutletContext]="{ $implicit: 'BOOK' }" />
         </nav>
         @if (dropError()) {
           <p class="mt-2 px-3 pb-1 text-xs text-rust">{{ dropError() }}</p>
