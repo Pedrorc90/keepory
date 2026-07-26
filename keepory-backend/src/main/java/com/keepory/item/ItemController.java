@@ -37,8 +37,9 @@ public class ItemController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String sortBy,
             @RequestParam(required = false) UUID collectionId,
+            @RequestParam(defaultValue = "false") boolean excludeCollected,
             @PageableDefault(size = 20) Pageable pageable) {
-        return service.search(type, status, q, sortBy, collectionId, pageable);
+        return service.search(type, status, q, sortBy, collectionId, excludeCollected, pageable);
     }
 
     @GetMapping("/{id}")

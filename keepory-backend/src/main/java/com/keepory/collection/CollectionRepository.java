@@ -30,9 +30,28 @@ public interface CollectionRepository extends JpaRepository<Collection, UUID> {
             """, nativeQuery = true)
     List<CollectionCount> countItems();
 
+    // Up to four covers per collection, newest first: the mosaic on the collection card.
+    @Query(value = """
+            select "collectionId", "coverUrl" from (
+              select ci.collection_id as "collectionId", i.cover_url as "coverUrl",
+                     row_number() over (partition by ci.collection_id order by ci.added_at desc) as rn
+              from collection_item ci
+              join item i on i.id = ci.item_id
+              where i.deleted_at is null and i.cover_url is not null
+            ) ranked
+            where rn <= 4
+            """, nativeQuery = true)
+    List<CollectionCover> findCovers();
+
     interface CollectionCount {
         UUID getCollectionId();
 
         long getTotal();
+    }
+
+    interface CollectionCover {
+        UUID getCollectionId();
+
+        String getCoverUrl();
     }
 }

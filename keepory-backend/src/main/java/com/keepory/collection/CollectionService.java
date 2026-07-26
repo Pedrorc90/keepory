@@ -37,8 +37,15 @@ public class CollectionService {
                 .collect(Collectors.toMap(
                         CollectionRepository.CollectionCount::getCollectionId,
                         CollectionRepository.CollectionCount::getTotal));
+        Map<UUID, List<String>> covers = repository.findCovers().stream()
+                .collect(Collectors.groupingBy(
+                        CollectionRepository.CollectionCover::getCollectionId,
+                        Collectors.mapping(CollectionRepository.CollectionCover::getCoverUrl, Collectors.toList())));
         return collections.stream()
-                .map(collection -> CollectionResponse.from(collection, counts.getOrDefault(collection.getId(), 0L)))
+                .map(collection -> CollectionResponse.from(
+                        collection,
+                        counts.getOrDefault(collection.getId(), 0L),
+                        covers.getOrDefault(collection.getId(), List.of())))
                 .toList();
     }
 

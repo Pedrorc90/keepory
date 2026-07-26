@@ -26,7 +26,7 @@ public class ItemService {
 
     @Transactional(readOnly = true)
     public Page<ItemResponse> search(ItemType type, ItemStatus status, String q, String sort, UUID collectionId,
-                                     Pageable pageable) {
+                                     boolean excludeCollected, Pageable pageable) {
         String query = q == null ? "" : q.trim();
         String sortKey = "title".equals(sort) || "genre".equals(sort) ? sort : "recent";
         // The native query defines its own order; drop any sort carried by the Pageable.
@@ -35,7 +35,9 @@ public class ItemService {
                 type == null ? null : type.name(),
                 status == null ? null : status.name(),
                 query, sortKey,
-                collectionId == null ? null : collectionId.toString(), page).map(ItemResponse::from);
+                collectionId == null ? null : collectionId.toString(),
+                // Both filters together would always be empty: browsing a collection wins.
+                excludeCollected && collectionId == null, page).map(ItemResponse::from);
     }
 
     @Transactional(readOnly = true)

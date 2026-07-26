@@ -30,6 +30,8 @@ public interface ItemRepository extends JpaRepository<Item, UUID> {
               and (cast(:collectionId as text) is null or exists (
                     select 1 from collection_item ci
                     where ci.item_id = i.id and ci.collection_id = cast(:collectionId as uuid)))
+              and (cast(:excludeCollected as boolean) is not true or not exists (
+                    select 1 from collection_item ci2 where ci2.item_id = i.id))
             order by
               case when :sort = 'title' then lower(i.title) end,
               case when :sort = 'genre'
@@ -45,6 +47,8 @@ public interface ItemRepository extends JpaRepository<Item, UUID> {
               and (cast(:collectionId as text) is null or exists (
                     select 1 from collection_item ci
                     where ci.item_id = i.id and ci.collection_id = cast(:collectionId as uuid)))
+              and (cast(:excludeCollected as boolean) is not true or not exists (
+                    select 1 from collection_item ci2 where ci2.item_id = i.id))
             """,
             nativeQuery = true)
     Page<Item> search(@Param("type") String type,
@@ -52,5 +56,6 @@ public interface ItemRepository extends JpaRepository<Item, UUID> {
                       @Param("q") String q,
                       @Param("sort") String sort,
                       @Param("collectionId") String collectionId,
+                      @Param("excludeCollected") boolean excludeCollected,
                       Pageable pageable);
 }

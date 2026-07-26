@@ -11,6 +11,8 @@ export interface ItemFilters {
   q?: string | null;
   sort?: ItemSort;
   collectionId?: string | null;
+  /** Hides items that already live in a collection: the shelf shows the loose ones. */
+  excludeCollected?: boolean;
   page?: number;
   size?: number;
 }
@@ -29,6 +31,7 @@ export class ItemApi {
     if (filters.q) params = params.set('q', filters.q);
     if (filters.sort && filters.sort !== 'recent') params = params.set('sortBy', filters.sort);
     if (filters.collectionId) params = params.set('collectionId', filters.collectionId);
+    if (filters.excludeCollected) params = params.set('excludeCollected', true);
     return this.http.get<Page<Item>>(this.baseUrl, { params });
   }
 

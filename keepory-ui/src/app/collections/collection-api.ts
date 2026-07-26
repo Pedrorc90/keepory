@@ -9,6 +9,8 @@ export interface Collection {
   /** Null means the collection accepts any item type. */
   type: ItemType | null;
   itemCount: number;
+  /** Up to four covers, newest first: the mosaic on the collection card. */
+  covers: string[];
 }
 
 @Injectable({ providedIn: 'root' })

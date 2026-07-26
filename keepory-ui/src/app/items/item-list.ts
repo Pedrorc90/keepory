@@ -2,7 +2,7 @@ import { Component, computed, effect, inject, signal, untracked } from '@angular
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { combineLatest } from 'rxjs';
-import { CollectionApi } from '../collections/collection-api';
+import { Collection, CollectionApi } from '../collections/collection-api';
 import { DragState } from '../collections/drag-state';
 import { ItemApi, ItemSort } from './item-api';
 import {
@@ -43,7 +43,12 @@ import {
         </span>
       }
       @if (result(); as page) {
-        <span class="text-sm text-muted">{{ page.totalElements }} en la estantería</span>
+        <span class="text-sm text-muted">
+          {{ page.totalElements }} {{ shelfCollections().length ? 'sueltos' : 'en la estantería' }}
+          @if (shelfCollections().length; as total) {
+            · {{ total }} {{ total === 1 ? 'colección' : 'colecciones' }}
+          }
+        </span>
       }
       <a
         routerLink="/items/new"
@@ -106,7 +111,7 @@ import {
     } @else if (loading() && !result()) {
       <p class="mt-8 text-sm text-muted">Cargando la estantería…</p>
     } @else if (result(); as page) {
-      @if (page.content.length === 0) {
+      @if (page.content.length === 0 && shelfCollections().length === 0) {
         <div class="mt-14 text-center">
           <p class="font-display text-xl">La estantería está vacía</p>
           <p class="mt-2 text-sm text-muted">
@@ -119,6 +124,56 @@ import {
         </div>
       } @else {
         <ul class="mt-7 grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9">
+          @for (collection of shelfCollections(); track collection.id) {
+            <li class="group">
+              <a
+                [routerLink]="[]"
+                [queryParams]="{ collection: collection.id }"
+                class="block"
+                [attr.aria-label]="'Abrir la colección ' + collection.name"
+                (dragover)="onCollectionDragOver($event, collection)"
+                (dragleave)="onCollectionDragLeave(collection)"
+                (drop)="onCollectionDrop($event, collection)"
+              >
+                <div
+                  class="relative aspect-2/3 overflow-hidden rounded-md bg-panel transition duration-200 group-hover:-translate-y-1 group-hover:shadow-lg group-hover:shadow-black/40"
+                  [class]="
+                    dropTarget() === collection.id
+                      ? 'ring-2 ring-amber'
+                      : 'ring-1 ring-amber/25 group-hover:ring-amber/60'
+                  "
+                >
+                  @if (collection.covers.length >= 4) {
+                    <div class="grid h-full w-full grid-cols-2 grid-rows-2 gap-px">
+                      @for (cover of collection.covers; track cover) {
+                        <img [src]="cover" alt="" class="h-full w-full object-cover" loading="lazy" draggable="false" />
+                      }
+                    </div>
+                  } @else if (collection.covers.length) {
+                    <img
+                      [src]="collection.covers[0]"
+                      alt=""
+                      class="h-full w-full object-cover"
+                      loading="lazy"
+                      draggable="false"
+                    />
+                  } @else {
+                    <div class="flex h-full items-center justify-center p-4 text-center font-display text-lg text-muted">
+                      {{ collection.name }}
+                    </div>
+                  }
+                  <span class="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/80 via-ink/10 to-ink/30"></span>
+                  <span class="absolute left-2 top-2 flex items-center gap-1 rounded bg-ink/75 px-1.5 py-0.5 text-xs text-amber">
+                    <svg class="h-3 w-3" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                      <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.2l1.5 1.6h6.3A1.5 1.5 0 0 1 15 5.1v7.4A1.5 1.5 0 0 1 13.5 14h-11A1.5 1.5 0 0 1 1 12.5z" />
+                    </svg>
+                    {{ collection.itemCount }}
+                  </span>
+                </div>
+              </a>
+              <p class="mt-2 truncate text-sm">{{ collection.name }}</p>
+            </li>
+          }
           @for (item of page.content; track item.id) {
             <li class="group" [class.opacity-40]="draggingId() === item.id">
               <a
@@ -337,6 +392,15 @@ export class ItemList {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
 
+  /** Browsing the shelf: collections show as cards and their items stay inside them. */
+  readonly excludeCollected = computed(() => !this.collectionId() && !this.hasFilters());
+  readonly shelfCollections = computed(() => {
+    // Cards ride along with the first page only; paging counts items, not collections.
+    if (!this.excludeCollected() || (this.result()?.number ?? 0) > 0) return [];
+    return this.collections.forType(this.type());
+  });
+  readonly dropTarget = signal<string | null>(null);
+
   readonly draggingId = computed(() => this.drag.item()?.id ?? null);
   private dragJustEnded = false;
 
@@ -363,10 +427,13 @@ export class ItemList {
         this.load();
       });
 
-    // A drop only changes what is on screen when the shelf is filtered by that collection.
+    // A drop changes the screen when browsing that collection (the item arrives) or on
+    // the shelf, where the item leaves as soon as it belongs somewhere.
     effect(() => {
       const drop = this.drag.dropped();
-      if (drop && drop.collectionId === untracked(() => this.collectionId())) this.load();
+      if (!drop) return;
+      const active = untracked(() => this.collectionId());
+      if (drop.collectionId === active || untracked(() => this.excludeCollected())) this.load();
     });
   }
 
@@ -380,6 +447,7 @@ export class ItemList {
         q: this.q().trim() || null,
         sort: this.sort(),
         collectionId: this.collectionId(),
+        excludeCollected: this.excludeCollected(),
         page: this.page,
       })
       .subscribe({
@@ -453,6 +521,37 @@ export class ItemList {
     if (this.dragJustEnded) event.preventDefault();
   }
 
+  /** A typed collection only takes its own item type; an untyped one takes anything. */
+  private acceptsDrag(collection: Collection): boolean {
+    const item = this.drag.item();
+    return !!item && (collection.type === null || collection.type === item.type);
+  }
+
+  onCollectionDragOver(event: DragEvent, collection: Collection): void {
+    // Without preventDefault the browser refuses the drop, which is what we want
+    // for a collection that does not accept the dragged type.
+    if (!this.acceptsDrag(collection)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+    this.dropTarget.set(collection.id);
+  }
+
+  onCollectionDragLeave(collection: Collection): void {
+    if (this.dropTarget() === collection.id) this.dropTarget.set(null);
+  }
+
+  onCollectionDrop(event: DragEvent, collection: Collection): void {
+    event.preventDefault();
+    this.dropTarget.set(null);
+    const item = this.drag.item();
+    if (!item || !this.acceptsDrag(collection)) return;
+    this.drag.end();
+    this.collections.addItem(collection.id, item.id).subscribe({
+      next: () => this.drag.dropOn(collection.id, item.id),
+      error: () => this.error.set(`No se pudo añadir «${item.title}» a ${collection.name}.`),
+    });
+  }
+
   openPicker(item: Item): void {
     this.picker.set(item);
     this.pickerIds.set([]);
@@ -465,8 +564,8 @@ export class ItemList {
 
   closePicker(): void {
     this.picker.set(null);
-    // Reload only when filtering by a collection: membership may have changed.
-    if (this.collectionId()) this.load();
+    // Membership may have changed, which moves the item in or out of what is shown.
+    if (this.collectionId() || this.excludeCollected()) this.load();
   }
 
   togglePicker(item: Item, collectionId: string): void {
