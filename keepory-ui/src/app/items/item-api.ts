@@ -10,6 +10,7 @@ export interface ItemFilters {
   status?: ItemStatus | null;
   q?: string | null;
   sort?: ItemSort;
+  collectionId?: string | null;
   page?: number;
   size?: number;
 }
@@ -27,6 +28,7 @@ export class ItemApi {
     if (filters.status) params = params.set('status', filters.status);
     if (filters.q) params = params.set('q', filters.q);
     if (filters.sort && filters.sort !== 'recent') params = params.set('sortBy', filters.sort);
+    if (filters.collectionId) params = params.set('collectionId', filters.collectionId);
     return this.http.get<Page<Item>>(this.baseUrl, { params });
   }
 

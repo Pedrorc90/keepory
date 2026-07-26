@@ -1,6 +1,9 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { combineLatest } from 'rxjs';
+import { CollectionApi } from '../collections/collection-api';
+import { DragState } from '../collections/drag-state';
 import { ItemApi, ItemSort } from './item-api';
 import {
   ITEM_STATUSES,
@@ -26,6 +29,19 @@ import {
           </span>
         }
       </h1>
+      @if (activeCollection(); as collection) {
+        <span class="flex items-center gap-2 rounded-full border border-amber/50 bg-amber/10 px-3 py-1 text-sm">
+          {{ collection.name }}
+          <button
+            (click)="deleteCollection(collection)"
+            class="text-muted transition hover:text-rust"
+            [attr.aria-label]="'Eliminar la colección ' + collection.name"
+            title="Eliminar colección"
+          >
+            ✕
+          </button>
+        </span>
+      }
       @if (result(); as page) {
         <span class="text-sm text-muted">{{ page.totalElements }} en la estantería</span>
       }
@@ -104,13 +120,26 @@ import {
       } @else {
         <ul class="mt-7 grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9">
           @for (item of page.content; track item.id) {
-            <li class="group">
-              <a [routerLink]="['/items', item.id, 'edit']" class="block">
+            <li class="group" [class.opacity-40]="draggingId() === item.id">
+              <a
+                [routerLink]="['/items', item.id, 'edit']"
+                class="block"
+                [draggable]="true"
+                (dragstart)="startDrag($event, item)"
+                (dragend)="endDrag()"
+                (click)="onCardClick($event)"
+              >
                 <div
                   class="relative aspect-2/3 overflow-hidden rounded-md bg-panel ring-1 ring-line transition duration-200 group-hover:-translate-y-1 group-hover:shadow-lg group-hover:shadow-black/40 group-hover:ring-amber/60"
                 >
                   @if (item.coverUrl) {
-                    <img [src]="item.coverUrl" [alt]="item.title" class="h-full w-full object-cover" loading="lazy" />
+                    <img
+                      [src]="item.coverUrl"
+                      [alt]="item.title"
+                      class="h-full w-full object-cover"
+                      loading="lazy"
+                      draggable="false"
+                    />
                   } @else {
                     <div class="flex h-full items-center justify-center p-4 text-center font-display text-lg text-muted">
                       {{ item.title }}
@@ -162,13 +191,23 @@ import {
                     <p class="text-xs text-amber">{{ stars(item.rating) }}</p>
                   }
                 </div>
-                <button
-                  (click)="remove(item)"
-                  class="rounded p-1 text-muted opacity-0 transition hover:text-rust focus-visible:opacity-100 group-hover:opacity-100"
-                  [attr.aria-label]="'Eliminar ' + item.title"
-                >
-                  ✕
-                </button>
+                <div class="flex shrink-0 items-start">
+                  <button
+                    (click)="openPicker(item)"
+                    class="rounded p-1 text-muted opacity-0 transition hover:text-amber focus-visible:opacity-100 group-hover:opacity-100"
+                    [attr.aria-label]="'Añadir ' + item.title + ' a una colección'"
+                    title="Añadir a una colección"
+                  >
+                    ＋
+                  </button>
+                  <button
+                    (click)="remove(item)"
+                    class="rounded p-1 text-muted opacity-0 transition hover:text-rust focus-visible:opacity-100 group-hover:opacity-100"
+                    [attr.aria-label]="'Eliminar ' + item.title"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
             </li>
           }
@@ -197,10 +236,72 @@ import {
     }
       </div>
     </div>
+
+    @if (picker(); as item) {
+      <div
+        class="fixed inset-0 z-20 flex items-center justify-center bg-ink/70 p-4"
+        (click)="closePicker()"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div (click)="$event.stopPropagation()" class="w-full max-w-sm rounded-xl border border-line bg-panel p-5 shadow-xl">
+          <p class="font-display text-lg">Añadir a una colección</p>
+          <p class="mt-1 truncate text-sm text-muted">{{ item.title }}</p>
+
+          <ul class="mt-4 grid max-h-64 gap-1 overflow-y-auto">
+            @for (collection of pickerOptions(); track collection.id) {
+              <li>
+                <label class="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm transition hover:bg-paper/5">
+                  <input
+                    type="checkbox"
+                    [checked]="pickerIds().includes(collection.id)"
+                    (change)="togglePicker(item, collection.id)"
+                    class="h-4 w-4 accent-amber"
+                  />
+                  <span class="min-w-0 flex-1 truncate">{{ collection.name }}</span>
+                  <span class="text-xs text-muted">{{ collection.itemCount }}</span>
+                </label>
+              </li>
+            } @empty {
+              <li class="px-2 py-2 text-sm text-muted">Todavía no hay colecciones.</li>
+            }
+          </ul>
+
+          <div class="mt-4 flex gap-2 border-t border-line pt-4">
+            <input
+              #newName
+              (keydown.enter)="createCollection(item, newName)"
+              placeholder="Nueva colección…"
+              maxlength="120"
+              class="min-w-0 flex-1 rounded-md border border-line bg-ink px-3 py-2 text-sm placeholder:text-muted focus:border-amber focus:outline-none"
+              aria-label="Nombre de la nueva colección"
+            />
+            <button
+              (click)="createCollection(item, newName)"
+              class="rounded-md border border-line px-3 py-2 text-sm transition hover:border-amber"
+            >
+              Crear
+            </button>
+          </div>
+
+          @if (pickerError()) {
+            <p class="mt-3 text-xs text-rust">{{ pickerError() }}</p>
+          }
+
+          <button (click)="closePicker()" class="mt-4 w-full rounded-md bg-amber px-4 py-2 text-sm font-medium text-ink transition hover:brightness-110">
+            Listo
+          </button>
+        </div>
+      </div>
+    }
   `,
 })
 export class ItemList {
   private readonly api = inject(ItemApi);
+  private readonly collections = inject(CollectionApi);
+  private readonly drag = inject(DragState);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   readonly statusBubbles: { value: ItemStatus | ''; label: string }[] = [
     { value: '', label: 'Todos' },
@@ -227,23 +328,46 @@ export class ItemList {
   readonly sort = signal<ItemSort>('recent');
   readonly status = signal<ItemStatus | ''>('');
   readonly q = signal('');
+  readonly collectionId = signal<string | null>(null);
+  readonly activeCollection = computed(() => {
+    const id = this.collectionId();
+    return id ? (this.collections.byId(id) ?? null) : null;
+  });
   readonly result = signal<Page<Item> | null>(null);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
+
+  readonly draggingId = computed(() => this.drag.item()?.id ?? null);
+  private dragJustEnded = false;
+
+  readonly picker = signal<Item | null>(null);
+  readonly pickerIds = signal<string[]>([]);
+  readonly pickerError = signal<string | null>(null);
+  readonly pickerOptions = computed(() => {
+    const item = this.picker();
+    return item ? this.collections.forType(item.type) : [];
+  });
 
   private page = 0;
   private searchTimer?: ReturnType<typeof setTimeout>;
 
   constructor() {
-    inject(ActivatedRoute)
-      .data.pipe(takeUntilDestroyed())
-      .subscribe((data) => {
+    combineLatest([this.route.data, this.route.queryParamMap])
+      .pipe(takeUntilDestroyed())
+      .subscribe(([data, params]) => {
         this.type.set((data['type'] as ItemType | undefined) ?? '');
+        this.collectionId.set(params.get('collection'));
         this.status.set('');
         this.q.set('');
         this.page = 0;
         this.load();
       });
+
+    // A drop only changes what is on screen when the shelf is filtered by that collection.
+    effect(() => {
+      const drop = this.drag.dropped();
+      if (drop && drop.collectionId === untracked(() => this.collectionId())) this.load();
+    });
   }
 
   load(): void {
@@ -255,6 +379,7 @@ export class ItemList {
         status: this.status() || null,
         q: this.q().trim() || null,
         sort: this.sort(),
+        collectionId: this.collectionId(),
         page: this.page,
       })
       .subscribe({
@@ -305,6 +430,83 @@ export class ItemList {
 
   watchProviders(item: Item): ProviderBadge[] | null {
     return providerBadges(item.attributes['watchProviders']);
+  }
+
+  startDrag(event: DragEvent, item: Item): void {
+    this.drag.start(item);
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'copy';
+      event.dataTransfer.setData('text/plain', item.id);
+    }
+  }
+
+  endDrag(): void {
+    this.drag.end();
+    // A cancelled drag fires a click on the card afterwards; swallow that one
+    // so releasing the item outside a collection does not open the editor.
+    this.dragJustEnded = true;
+    setTimeout(() => (this.dragJustEnded = false));
+  }
+
+  /** Blocks the routerLink navigation triggered by the click that follows a drag. */
+  onCardClick(event: MouseEvent): void {
+    if (this.dragJustEnded) event.preventDefault();
+  }
+
+  openPicker(item: Item): void {
+    this.picker.set(item);
+    this.pickerIds.set([]);
+    this.pickerError.set(null);
+    this.collections.ofItem(item.id).subscribe({
+      next: (ids) => this.pickerIds.set(ids),
+      error: () => this.pickerError.set('No se pudieron cargar las colecciones del elemento.'),
+    });
+  }
+
+  closePicker(): void {
+    this.picker.set(null);
+    // Reload only when filtering by a collection: membership may have changed.
+    if (this.collectionId()) this.load();
+  }
+
+  togglePicker(item: Item, collectionId: string): void {
+    const selected = this.pickerIds().includes(collectionId);
+    const call = selected
+      ? this.collections.removeItem(collectionId, item.id)
+      : this.collections.addItem(collectionId, item.id);
+    this.pickerError.set(null);
+    call.subscribe({
+      next: () =>
+        this.pickerIds.update((ids) =>
+          selected ? ids.filter((id) => id !== collectionId) : [...ids, collectionId],
+        ),
+      error: () => this.pickerError.set('No se pudo actualizar la colección.'),
+    });
+  }
+
+  createCollection(item: Item, input: HTMLInputElement): void {
+    const name = input.value.trim();
+    if (!name) return;
+    this.pickerError.set(null);
+    // Created with the item's type so it shows up under Películas or Libros.
+    this.collections.create(name, item.type).subscribe({
+      next: (collection) => {
+        input.value = '';
+        this.togglePicker(item, collection.id);
+      },
+      error: (err: { status?: number }) =>
+        this.pickerError.set(
+          err.status === 409 ? 'Ya existe una colección con ese nombre.' : 'No se pudo crear la colección.',
+        ),
+    });
+  }
+
+  deleteCollection(collection: { id: string; name: string }): void {
+    if (!confirm(`¿Eliminar la colección «${collection.name}»? Los elementos no se borran.`)) return;
+    this.collections.delete(collection.id).subscribe({
+      next: () => this.router.navigate([], { relativeTo: this.route, queryParams: {} }),
+      error: () => this.error.set('No se pudo eliminar la colección.'),
+    });
   }
 
   remove(item: Item): void {

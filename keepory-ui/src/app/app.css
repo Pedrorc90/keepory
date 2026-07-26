@@ -1,0 +1,13 @@
+/* Sidebar drop feedback while an item is being dragged from the grid.
+   Doubled selectors so they win over routerLinkActive's "!" utilities. */
+.drop-ready.drop-ready {
+  border-style: dashed;
+  border-color: color-mix(in oklab, var(--color-amber) 45%, transparent) !important;
+}
+
+.drop-target.drop-target {
+  border-style: solid;
+  border-color: var(--color-amber) !important;
+  background-color: color-mix(in oklab, var(--color-amber) 18%, transparent) !important;
+  color: var(--color-paper) !important;
+}

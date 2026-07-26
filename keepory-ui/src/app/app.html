@@ -1,29 +1,145 @@
 <div class="flex min-h-dvh flex-col">
   <header class="border-b border-line">
-    <div class="mx-auto flex w-full sm:max-w-[80%] items-baseline gap-3 px-4 py-4">
+    <div class="mx-auto flex w-full sm:max-w-[92%] items-baseline gap-3 px-4 py-4">
       <a routerLink="/items" class="font-display text-2xl font-semibold tracking-tight">
         Keepory<span class="text-amber">.</span>
       </a>
       <span class="hidden text-sm text-muted sm:inline">lo visto, lo leído, lo vivido</span>
       <nav class="ml-auto flex items-center gap-4 text-sm">
-        <a
-          routerLink="/items"
-          routerLinkActive="text-amber"
-          [routerLinkActiveOptions]="{ exact: true }"
-          class="text-muted transition hover:text-paper"
-          >Todos</a
-        >
-        <a routerLink="/movies" routerLinkActive="text-amber" class="text-muted transition hover:text-paper">Películas</a>
-        <a routerLink="/books" routerLinkActive="text-amber" class="text-muted transition hover:text-paper">Libros</a>
         <a routerLink="/suggestions" routerLinkActive="text-amber" class="text-muted transition hover:text-paper">Sugerencias</a>
       </nav>
     </div>
   </header>
-  <main class="mx-auto w-full sm:max-w-[80%] flex-1 px-4 py-8">
-    <router-outlet />
-  </main>
+  <ng-template #newCollection let-type>
+    @if (creatingFor() === type) {
+      <div class="shrink-0 py-1 md:ml-3.5 md:border-l md:border-l-line md:pl-3">
+        <input
+          id="new-collection-input"
+          (keydown.enter)="createCollection(type, $any($event.target))"
+          (keydown.escape)="cancelCreate()"
+          (blur)="createCollection(type, $any($event.target))"
+          placeholder="Nombre y Enter…"
+          maxlength="120"
+          class="w-full min-w-40 rounded-md border border-amber/60 bg-ink px-2.5 py-1.5 text-sm placeholder:text-muted focus:outline-none"
+          aria-label="Nombre de la nueva colección"
+        />
+        @if (createError()) {
+          <span class="mt-1 block text-xs text-rust">{{ createError() }}</span>
+        }
+      </div>
+    } @else {
+      <button
+        (click)="startCreate(type)"
+        class="flex shrink-0 items-center gap-2 rounded-lg py-1.5 pl-4 pr-3 text-left text-sm text-muted/80 transition hover:text-amber md:ml-3.5 md:border-l md:border-l-line md:pl-3"
+      >
+        <span class="text-base leading-none">＋</span> Nueva colección
+      </button>
+    }
+  </ng-template>
+
+  <div class="mx-auto flex w-full flex-1 flex-col gap-8 px-4 py-8 sm:max-w-[92%] md:flex-row">
+    <aside class="md:w-64 md:shrink-0">
+      <div class="rounded-xl border border-line bg-panel/50 p-2 md:sticky md:top-8">
+        <p class="mb-1 hidden px-3 pt-2 font-display text-xs uppercase tracking-[0.2em] text-muted md:block">
+          Colecciones
+        </p>
+        <nav class="flex gap-1.5 overflow-x-auto md:flex-col" aria-label="Colecciones">
+          <a
+            routerLink="/items"
+            routerLinkActive="!border-amber/70 !bg-amber/10 !text-paper"
+            [routerLinkActiveOptions]="exactMatch"
+            class="group flex shrink-0 items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 text-sm text-muted transition hover:bg-paper/5 hover:text-paper"
+          >
+            <svg class="h-4 w-4 opacity-80" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <rect x="1" y="1" width="6" height="6" rx="1.5" />
+              <rect x="9" y="1" width="6" height="6" rx="1.5" />
+              <rect x="1" y="9" width="6" height="6" rx="1.5" />
+              <rect x="9" y="9" width="6" height="6" rx="1.5" />
+            </svg>
+            Todos
+          </a>
+          <a
+            routerLink="/movies"
+            routerLinkActive="!border-rust/60 !bg-rust/10 !text-paper"
+            [routerLinkActiveOptions]="exactMatch"
+            class="group flex shrink-0 items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 text-sm text-muted transition hover:bg-paper/5 hover:text-paper"
+          >
+            <svg class="h-4 w-4 text-rust" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <rect x="1" y="2" width="14" height="12" rx="2" />
+              <g fill="rgba(0, 0, 0, 0.45)">
+                <rect x="2.75" y="3.75" width="2" height="2" rx="0.5" />
+                <rect x="2.75" y="10.25" width="2" height="2" rx="0.5" />
+                <rect x="11.25" y="3.75" width="2" height="2" rx="0.5" />
+                <rect x="11.25" y="10.25" width="2" height="2" rx="0.5" />
+              </g>
+            </svg>
+            Películas
+          </a>
+          @for (collection of movieCollections(); track collection.id) {
+            <a
+              routerLink="/movies"
+              [queryParams]="{ collection: collection.id }"
+              routerLinkActive="!border-rust/50 !bg-rust/10 !text-paper"
+              [routerLinkActiveOptions]="exactMatch"
+              draggable="false"
+              (dragover)="onDragOver($event, collection)"
+              (dragleave)="onDragLeave(collection)"
+              (drop)="onDrop($event, collection)"
+              [class.drop-ready]="acceptsDrag(collection)"
+              [class.drop-target]="dropTarget() === collection.id"
+              class="flex shrink-0 items-center gap-2 rounded-lg border border-transparent py-1.5 pl-4 pr-3 text-sm text-muted transition hover:bg-paper/5 hover:text-paper md:ml-3.5 md:border-l md:border-l-line md:pl-3"
+            >
+              <span class="truncate">{{ collection.name }}</span>
+              <span class="ml-auto text-xs text-muted/70">{{ collection.itemCount }}</span>
+            </a>
+          }
+          <ng-container [ngTemplateOutlet]="newCollection" [ngTemplateOutletContext]="{ $implicit: 'MOVIE' }" />
+          <a
+            routerLink="/books"
+            routerLinkActive="!border-moss/60 !bg-moss/10 !text-paper"
+            [routerLinkActiveOptions]="exactMatch"
+            class="group flex shrink-0 items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 text-sm text-muted transition hover:bg-paper/5 hover:text-paper"
+          >
+            <svg class="h-4 w-4 text-moss" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M3 1.5h10v13l-5-3.6-5 3.6z" />
+            </svg>
+            Libros
+          </a>
+          @for (collection of bookCollections(); track collection.id) {
+            <a
+              routerLink="/books"
+              [queryParams]="{ collection: collection.id }"
+              routerLinkActive="!border-moss/50 !bg-moss/10 !text-paper"
+              [routerLinkActiveOptions]="exactMatch"
+              draggable="false"
+              (dragover)="onDragOver($event, collection)"
+              (dragleave)="onDragLeave(collection)"
+              (drop)="onDrop($event, collection)"
+              [class.drop-ready]="acceptsDrag(collection)"
+              [class.drop-target]="dropTarget() === collection.id"
+              class="flex shrink-0 items-center gap-2 rounded-lg border border-transparent py-1.5 pl-4 pr-3 text-sm text-muted transition hover:bg-paper/5 hover:text-paper md:ml-3.5 md:border-l md:border-l-line md:pl-3"
+            >
+              <span class="truncate">{{ collection.name }}</span>
+              <span class="ml-auto text-xs text-muted/70">{{ collection.itemCount }}</span>
+            </a>
+          }
+          <ng-container [ngTemplateOutlet]="newCollection" [ngTemplateOutletContext]="{ $implicit: 'BOOK' }" />
+        </nav>
+        @if (dropError()) {
+          <p class="mt-2 px-3 pb-1 text-xs text-rust">{{ dropError() }}</p>
+        } @else if (draggedItem()) {
+          <p class="mt-2 hidden px-3 pb-1 text-xs text-muted md:block">
+            Suelta sobre una colección para añadirlo.
+          </p>
+        }
+      </div>
+    </aside>
+    <main class="min-w-0 flex-1">
+      <router-outlet />
+    </main>
+  </div>
   <footer class="border-t border-line">
-    <div class="mx-auto w-full sm:max-w-[80%] px-4 py-3 text-xs text-muted">
+    <div class="mx-auto w-full sm:max-w-[92%] px-4 py-3 text-xs text-muted">
       This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability data provided by
       JustWatch. Book covers courtesy of Open Library.
     </div>

@@ -1,8 +1,9 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { CollectionApi } from '../collections/collection-api';
 import { ItemApi } from './item-api';
 import {
   ATTRIBUTE_FIELDS,
@@ -233,6 +234,49 @@ import { MetadataSearchResult } from './metadata.model';
                   </div>
                 }
 
+                <div class="grid gap-1.5 text-sm">
+                  <span class="text-muted">Colecciones</span>
+                  @if (collectionOptions().length) {
+                    <div class="flex flex-wrap gap-2">
+                      @for (collection of collectionOptions(); track collection.id) {
+                        <label class="cursor-pointer">
+                          <input
+                            type="checkbox"
+                            class="peer sr-only"
+                            [checked]="selectedCollections().includes(collection.id)"
+                            (change)="toggleCollection(collection.id)"
+                          />
+                          <span
+                            class="flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm text-muted transition hover:border-amber/60 hover:text-paper peer-checked:border-amber peer-checked:bg-amber/15 peer-checked:text-paper peer-focus-visible:ring-2 peer-focus-visible:ring-amber/70"
+                          >
+                            {{ collection.name }}
+                          </span>
+                        </label>
+                      }
+                    </div>
+                  }
+                  <div class="flex gap-2">
+                    <input
+                      #collectionName
+                      (keydown.enter)="$event.preventDefault(); createCollection(collectionName)"
+                      placeholder="Nueva colección…"
+                      maxlength="120"
+                      class="min-w-0 flex-1 rounded-md border border-line bg-panel px-3 py-2 placeholder:text-muted focus:border-amber focus:outline-none"
+                      aria-label="Nombre de la nueva colección"
+                    />
+                    <button
+                      type="button"
+                      (click)="createCollection(collectionName)"
+                      class="rounded-md border border-line px-4 py-2 text-sm transition hover:border-amber"
+                    >
+                      Crear
+                    </button>
+                  </div>
+                  @if (collectionError()) {
+                    <span class="text-xs text-rust">{{ collectionError() }}</span>
+                  }
+                </div>
+
                 <label class="grid gap-1.5 text-sm">
                   <span class="text-muted">Notas</span>
                   <textarea
@@ -287,6 +331,7 @@ import { MetadataSearchResult } from './metadata.model';
 })
 export class ItemForm {
   private readonly api = inject(ItemApi);
+  private readonly collections = inject(CollectionApi);
   private readonly metadata = inject(MetadataApi);
   private readonly router = inject(Router);
   private readonly fb = inject(NonNullableFormBuilder);
@@ -321,6 +366,11 @@ export class ItemForm {
   readonly genres = signal<GenreChip[] | null>(null);
   readonly providerLogos = signal<ProviderBadge[] | null>(null);
 
+  readonly currentType = signal<ItemType>('MOVIE');
+  readonly collectionOptions = computed(() => this.collections.forType(this.currentType()));
+  readonly selectedCollections = signal<string[]>([]);
+  readonly collectionError = signal<string | null>(null);
+
   readonly coverPreview = toSignal(this.form.controls.coverUrl.valueChanges, { initialValue: '' });
   readonly detailsVisible = signal(this.id !== null);
   readonly submitted = signal(false);
@@ -336,6 +386,10 @@ export class ItemForm {
     this.rebuildAttrs();
     this.form.controls.type.valueChanges.subscribe((type) => {
       this.searchResults.set(null);
+      this.currentType.set(type);
+      // Drop the collections that no longer accept this type.
+      const allowed = this.collectionOptions().map((c) => c.id);
+      this.selectedCollections.update((ids) => ids.filter((id) => allowed.includes(id)));
       this.rebuildAttrs();
       this.providerLogos.set(type === 'MOVIE' ? providerBadges(this.attributes['watchProviders']) : null);
     });
@@ -348,19 +402,51 @@ export class ItemForm {
         this.attributes = item.attributes ?? {};
         this.source = item.source;
         this.externalId = item.externalId;
-        this.form.patchValue({
-          type: item.type,
-          title: item.title,
-          coverUrl: item.coverUrl ?? '',
-          status: item.status,
-          rating: item.rating?.toString() ?? '',
-          completedAt: item.completedAt ?? '',
-          notes: item.notes ?? '',
-        });
+        // Silent patch: the type handler would prune the collections loaded below
+        // against a list that may still be empty on a direct reload.
+        this.form.patchValue(
+          {
+            type: item.type,
+            title: item.title,
+            coverUrl: item.coverUrl ?? '',
+            status: item.status,
+            rating: item.rating?.toString() ?? '',
+            completedAt: item.completedAt ?? '',
+            notes: item.notes ?? '',
+          },
+          { emitEvent: false },
+        );
+        this.currentType.set(item.type);
         this.rebuildAttrs();
         this.providerLogos.set(providerBadges(this.attributes['watchProviders']));
       },
       error: () => this.loadError.set('No se pudo cargar el elemento.'),
+    });
+    this.collections.ofItem(id).subscribe({
+      next: (ids) => this.selectedCollections.set(ids),
+      error: () => this.collectionError.set('No se pudieron cargar las colecciones.'),
+    });
+  }
+
+  toggleCollection(id: string): void {
+    this.selectedCollections.update((ids) =>
+      ids.includes(id) ? ids.filter((current) => current !== id) : [...ids, id],
+    );
+  }
+
+  createCollection(input: HTMLInputElement): void {
+    const name = input.value.trim();
+    if (!name) return;
+    this.collectionError.set(null);
+    this.collections.create(name, this.currentType()).subscribe({
+      next: (collection) => {
+        input.value = '';
+        this.selectedCollections.update((ids) => [...ids, collection.id]);
+      },
+      error: (err: HttpErrorResponse) =>
+        this.collectionError.set(
+          err.status === 409 ? 'Ya existe una colección con ese nombre.' : 'No se pudo crear la colección.',
+        ),
     });
   }
 
@@ -477,13 +563,23 @@ export class ItemForm {
     this.saveError.set(null);
     const call = this.id ? this.api.update(this.id, request) : this.api.create(request);
     call.subscribe({
-      next: () => this.router.navigate(['/items']),
+      next: (item) => this.saveCollections(item.id),
       error: (err: HttpErrorResponse) => {
         this.saveError.set(
           err.status === 409
             ? 'Este elemento ya está en tu colección.'
             : 'No se pudo guardar. Revisa los datos e inténtalo de nuevo.',
         );
+        this.saving.set(false);
+      },
+    });
+  }
+
+  private saveCollections(itemId: string): void {
+    this.collections.setForItem(itemId, this.selectedCollections()).subscribe({
+      next: () => this.router.navigate(['/items']),
+      error: () => {
+        this.saveError.set('El elemento se guardó, pero no se pudieron actualizar sus colecciones.');
         this.saving.set(false);
       },
     });
