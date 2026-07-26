@@ -2,9 +2,9 @@ spring:
   application:
     name: keepory-backend
   datasource:
-    url: jdbc:postgresql://localhost:5432/keepory
-    username: keepory
-    password: keepory
+    url: ${KEEPORY_DB_URL:jdbc:postgresql://localhost:5432/keepory}
+    username: ${KEEPORY_DB_USER:keepory}
+    password: ${KEEPORY_DB_PASSWORD:keepory}
   jpa:
     hibernate:
       ddl-auto: validate

@@ -1,0 +1,13 @@
+.git
+.gitignore
+.idea
+.vscode
+docs
+*.md
+docker-compose.yml
+render.yaml
+
+**/node_modules
+**/target
+**/dist
+**/.angular
