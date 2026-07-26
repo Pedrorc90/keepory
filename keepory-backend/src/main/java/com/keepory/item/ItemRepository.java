@@ -27,6 +27,9 @@ public interface ItemRepository extends JpaRepository<Item, UUID> {
               and (cast(:type as text) is null or i.type = cast(:type as text))
               and (cast(:status as text) is null or i.status = cast(:status as text))
               and (:q = '' or i.title ilike '%' || :q || '%')
+              and (cast(:collectionId as text) is null or exists (
+                    select 1 from collection_item ci
+                    where ci.item_id = i.id and ci.collection_id = cast(:collectionId as uuid)))
             order by
               case when :sort = 'title' then lower(i.title) end,
               case when :sort = 'genre'
@@ -39,11 +42,15 @@ public interface ItemRepository extends JpaRepository<Item, UUID> {
               and (cast(:type as text) is null or i.type = cast(:type as text))
               and (cast(:status as text) is null or i.status = cast(:status as text))
               and (:q = '' or i.title ilike '%' || :q || '%')
+              and (cast(:collectionId as text) is null or exists (
+                    select 1 from collection_item ci
+                    where ci.item_id = i.id and ci.collection_id = cast(:collectionId as uuid)))
             """,
             nativeQuery = true)
     Page<Item> search(@Param("type") String type,
                       @Param("status") String status,
                       @Param("q") String q,
                       @Param("sort") String sort,
+                      @Param("collectionId") String collectionId,
                       Pageable pageable);
 }

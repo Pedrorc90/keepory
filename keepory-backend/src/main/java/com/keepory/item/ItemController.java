@@ -36,8 +36,9 @@ public class ItemController {
             @RequestParam(required = false) ItemStatus status,
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) UUID collectionId,
             @PageableDefault(size = 20) Pageable pageable) {
-        return service.search(type, status, q, sortBy, pageable);
+        return service.search(type, status, q, sortBy, collectionId, pageable);
     }
 
     @GetMapping("/{id}")

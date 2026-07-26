@@ -25,7 +25,8 @@ public class ItemService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ItemResponse> search(ItemType type, ItemStatus status, String q, String sort, Pageable pageable) {
+    public Page<ItemResponse> search(ItemType type, ItemStatus status, String q, String sort, UUID collectionId,
+                                     Pageable pageable) {
         String query = q == null ? "" : q.trim();
         String sortKey = "title".equals(sort) || "genre".equals(sort) ? sort : "recent";
         // The native query defines its own order; drop any sort carried by the Pageable.
@@ -33,7 +34,8 @@ public class ItemService {
         return repository.search(
                 type == null ? null : type.name(),
                 status == null ? null : status.name(),
-                query, sortKey, page).map(ItemResponse::from);
+                query, sortKey,
+                collectionId == null ? null : collectionId.toString(), page).map(ItemResponse::from);
     }
 
     @Transactional(readOnly = true)
