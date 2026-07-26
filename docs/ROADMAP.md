@@ -14,7 +14,7 @@ Fuente de verdad del plan por fases. Claude lo lee al inicio de sesión y lo act
   - [x] **F4.3 — Colecciones** (2026-07-26): agrupar items en colecciones con nombre y tipo opcional. Backend `/api/collections` (CRUD + add/remove item + set masivo por item), migración V5 (`collection` + `collection_item`), filtro `collectionId` en `GET /api/items`. UI: sidebar con las colecciones por tipo (los links de tipo se mueven del header al sidebar), crear inline, renombrar y borrar desde la fila (2026-07-26), arrastrar tarjeta sobre colección para añadir, picker en la tarjeta y chips en el form.
   - Ideas aplazadas: sugerencias desde la propia colección ("qué ver ahora"), redescubrimiento/estadísticas.
 - [ ] **F5 — Auth + deploy**
-  - [ ] **F5.1 — Deploy** (fontanería escrita 2026-07-26, sin desplegar todavía): Render free (Docker) + Neon (Postgres free) + Angular servido por el propio backend, un único origen. `Dockerfile` multi-stage (ng build → `resources/static` → jar → archivo CDS para recortar el arranque en frío), `render.yaml` con los secretos en `sync: false`, perfil `prod` (`PORT`, compresión, logging), `SpaFallbackConfig` para que las rutas de Angular sobrevivan a un F5. Datasource por `KEEPORY_DB_URL/USER/PASSWORD`.
+  - [ ] **F5.1 — Deploy** (fontanería escrita y probada en local 2026-07-26 — imagen Docker arranca en 2,6 s contra el Postgres local, sirve SPA + API y devuelve 404 en `/api` inexistente; falta desplegar de verdad): Render free (Docker) + Neon (Postgres free) + Angular servido por el propio backend, un único origen. `Dockerfile` multi-stage (ng build → `resources/static` → jar → archivo CDS para recortar el arranque en frío), `render.yaml` con los secretos en `sync: false`, perfil `prod` (`PORT`, compresión, logging), `SpaFallbackConfig` para que las rutas de Angular sobrevivan a un F5. Datasource por `KEEPORY_DB_URL/USER/PASSWORD`.
   - [ ] **F5.2 — Auth**: sin decidir (usuario único con sesión vs. proveedor externo).
 - [ ] **F6 — Offline móvil** (Capacitor; offline-first, sync pull/push incremental por `updatedAt`, last-write-wins)
 
@@ -42,5 +42,6 @@ Fuente de verdad del plan por fases. Claude lo lee al inicio de sesión y lo act
 
 ## Pendiente de decidir
 
+- F5.1: bloqueado por Pedro — el repo es solo local (sin remote) y Render necesita leer `render.yaml` desde GitHub. Falta: crear el repo, `git remote add origin` + `push -u`, proyecto en Neon (URL en formato JDBC, `?sslmode=require`) y blueprint en Render con los 5 secretos `sync: false`.
 - F4.2: ¿seguir depurando Google Books o cambiar de proveedor (Open Library como fuente de datos, no solo de covers)?
 - F5: ¿auth propia (usuario único, sesión) o proveedor externo? — **Dónde despliega: decidido 2026-07-26**, Render + Neon (PaaS que Pedro ya conoce); se descartó VPS único (~4,5 €/mes, más apps en la misma máquina) por no añadir mantenimiento, y GitHub Pages para la UI por el CORS/cookies cross-site que traería la auth.
