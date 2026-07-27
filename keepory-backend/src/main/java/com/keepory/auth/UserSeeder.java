@@ -33,9 +33,11 @@ class UserSeeder implements ApplicationRunner {
                @Value("${keepory.admin.display-name:}") String displayName) {
         this.repository = repository;
         this.passwordEncoder = passwordEncoder;
-        this.email = email;
-        this.password = password;
-        this.displayName = displayName;
+        // Trimmed: these are pasted into a Render form, and a trailing space there
+        // is invisible but locks the owner out of the account it just created.
+        this.email = email.trim();
+        this.password = password.trim();
+        this.displayName = displayName.trim();
     }
 
     @Override
@@ -45,8 +47,17 @@ class UserSeeder implements ApplicationRunner {
             log.info("Owner account not seeded: keepory.admin.email/password are unset");
             return;
         }
-        // Idempotent: this runs on every boot, and Render boots often.
-        if (repository.findByEmail(email).isPresent()) {
+        // The env var is the owner's password of record: changing it in Render and
+        // redeploying is the only way to recover the account, since there is no
+        // password reset flow. Runs on every boot, and Render boots often.
+        var existing = repository.findByEmail(email);
+        if (existing.isPresent()) {
+            AppUser owner = existing.get();
+            if (!passwordEncoder.matches(password, owner.getPasswordHash())) {
+                owner.setPasswordHash(passwordEncoder.encode(password));
+                repository.save(owner);
+                log.info("Owner password reset from configuration for {}", email);
+            }
             return;
         }
         AppUser user = new AppUser();
