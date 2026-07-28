@@ -249,7 +249,7 @@ import {
                 <div class="flex shrink-0 items-start">
                   <button
                     (click)="openPicker(item)"
-                    class="rounded p-1 text-muted opacity-0 transition hover:text-amber focus-visible:opacity-100 group-hover:opacity-100"
+                    class="rounded p-1 text-muted transition hover:text-amber focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
                     [attr.aria-label]="'Añadir ' + item.title + ' a una colección'"
                     title="Añadir a una colección"
                   >
@@ -257,7 +257,7 @@ import {
                   </button>
                   <button
                     (click)="remove(item)"
-                    class="rounded p-1 text-muted opacity-0 transition hover:text-rust focus-visible:opacity-100 group-hover:opacity-100"
+                    class="rounded p-1 text-muted transition hover:text-rust focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
                     [attr.aria-label]="'Eliminar ' + item.title"
                   >
                     ✕

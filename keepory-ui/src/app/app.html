@@ -2,7 +2,21 @@
   <!-- Chrome only exists for a signed-in user; /login renders bare. -->
   @if (user()) {
   <header class="border-b border-line">
-    <div class="mx-auto flex w-full sm:max-w-[92%] items-baseline gap-3 px-4 py-4">
+    <div class="mx-auto flex w-full sm:max-w-[92%] items-center sm:items-baseline gap-3 px-4 py-4">
+      <button
+        type="button"
+        (click)="toggleDrawer()"
+        [attr.aria-expanded]="drawerOpen()"
+        aria-controls="collections-drawer"
+        aria-label="Abrir las colecciones"
+        class="-ml-1.5 rounded-lg p-1.5 text-muted transition hover:text-paper md:hidden"
+      >
+        <svg class="h-5 w-5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <rect x="1" y="3" width="14" height="1.6" rx="0.8" />
+          <rect x="1" y="7.2" width="14" height="1.6" rx="0.8" />
+          <rect x="1" y="11.4" width="14" height="1.6" rx="0.8" />
+        </svg>
+      </button>
       <a routerLink="/items" class="font-display text-2xl font-semibold tracking-tight">
         <img
           src="logo.png"
@@ -23,7 +37,7 @@
   }
   <ng-template #newCollection let-type>
     @if (creatingFor() === type) {
-      <div class="shrink-0 py-1 md:ml-3.5 md:border-l md:border-l-line md:pl-3">
+      <div class="shrink-0 py-1 ml-3.5 border-l border-l-line pl-3">
         <input
           id="new-collection-input"
           (keydown.enter)="createCollection(type, $any($event.target))"
@@ -41,7 +55,7 @@
     } @else {
       <button
         (click)="startCreate(type)"
-        class="flex shrink-0 items-center gap-2 rounded-lg py-1.5 pl-4 pr-3 text-left text-sm text-muted/80 transition hover:text-amber md:ml-3.5 md:border-l md:border-l-line md:pl-3"
+        class="ml-3.5 flex shrink-0 items-center gap-2 rounded-lg border-l border-l-line py-1.5 pl-3 pr-3 text-left text-sm text-muted/80 transition hover:text-amber"
       >
         <span class="text-base leading-none">＋</span> Nueva colección
       </button>
@@ -73,7 +87,7 @@
 
   <ng-template #collectionRow let-collection let-link="link" let-active="active">
     @if (renamingId() === collection.id) {
-      <div class="shrink-0 py-1 md:ml-3.5 md:border-l md:border-l-line md:pl-3">
+      <div class="shrink-0 py-1 ml-3.5 border-l border-l-line pl-3">
         <input
           id="rename-collection-input"
           [value]="collection.name"
@@ -89,7 +103,7 @@
         }
       </div>
     } @else {
-      <div class="group/row relative flex shrink-0 items-center md:ml-3.5 md:border-l md:border-l-line md:pl-3">
+      <div class="group/row relative ml-3.5 flex shrink-0 items-center border-l border-l-line pl-3">
         <a
           [routerLink]="link"
           [queryParams]="{ collection: collection.id }"
@@ -101,7 +115,7 @@
           (drop)="onDrop($event, collection)"
           [class.drop-ready]="acceptsDrag(collection)"
           [class.drop-target]="dropTarget() === collection.id"
-          class="flex w-full items-center gap-2 rounded-lg border border-transparent py-1.5 pl-4 pr-3 text-sm text-muted transition hover:bg-paper/5 hover:text-paper md:pl-3"
+          class="flex w-full items-center gap-2 rounded-lg border border-transparent py-1.5 pl-3 pr-3 text-sm text-muted transition hover:bg-paper/5 hover:text-paper"
         >
           <span class="truncate">{{ collection.name }}</span>
           <span class="ml-auto hidden text-xs text-muted/70 md:inline md:group-hover/row:invisible">
@@ -137,12 +151,27 @@
 
   <div class="mx-auto flex w-full flex-1 flex-col gap-8 px-4 py-8 sm:max-w-[92%] md:flex-row">
     @if (user()) {
-    <aside class="md:w-64 md:shrink-0">
+    @if (drawerOpen()) {
+      <div class="fixed inset-0 z-30 bg-ink/70 md:hidden" (click)="closeDrawer()" aria-hidden="true"></div>
+    }
+    <aside
+      id="collections-drawer"
+      class="fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] overflow-y-auto bg-ink p-3 shadow-2xl shadow-black/50 transition-transform duration-200 md:static md:z-auto md:w-64 md:max-w-none md:shrink-0 md:translate-x-0 md:overflow-visible md:bg-transparent md:p-0 md:shadow-none md:transition-none"
+      [class.-translate-x-full]="!drawerOpen()"
+    >
       <div class="rounded-xl border border-line bg-panel/50 p-2 md:sticky md:top-8">
-        <p class="mb-1 hidden px-3 pt-2 font-display text-xs uppercase tracking-[0.2em] text-muted md:block">
-          Colecciones
-        </p>
-        <nav class="flex gap-1.5 overflow-x-auto md:flex-col" aria-label="Colecciones">
+        <div class="mb-1 flex items-center justify-between px-3 pt-2">
+          <p class="font-display text-xs uppercase tracking-[0.2em] text-muted">Colecciones</p>
+          <button
+            type="button"
+            (click)="closeDrawer()"
+            class="-mr-1 rounded p-1 text-sm leading-none text-muted transition hover:text-paper md:hidden"
+            aria-label="Cerrar las colecciones"
+          >
+            ✕
+          </button>
+        </div>
+        <nav class="flex flex-col gap-1.5" aria-label="Colecciones">
           <a
             routerLink="/items"
             routerLinkActive="!border-amber/70 !bg-amber/10 !text-paper"

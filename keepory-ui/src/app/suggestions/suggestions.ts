@@ -49,7 +49,7 @@ interface SuggestionTexts {
             {{ refreshError() }}
           </p>
         }
-        <div class="mx-auto mt-8 w-fit space-y-8">
+        <div class="mx-auto mt-8 space-y-8 sm:w-fit">
           @for (section of sections(); track section.id) {
             <section>
               <div class="flex items-center gap-2">

@@ -4,11 +4,13 @@ import { Component, computed, effect, inject, signal } from '@angular/core';
 import {
   ActivatedRoute,
   IsActiveMatchOptions,
+  NavigationEnd,
   Router,
   RouterLink,
   RouterLinkActive,
   RouterOutlet,
 } from '@angular/router';
+import { filter } from 'rxjs';
 import { AuthApi } from './auth/auth-api';
 import { Collection, CollectionApi } from './collections/collection-api';
 import { DragState } from './collections/drag-state';
@@ -18,7 +20,8 @@ import { ItemType } from './items/item.model';
   selector: 'app-root',
   imports: [RouterOutlet, RouterLink, RouterLinkActive, NgTemplateOutlet],
   templateUrl: './app.html',
-  styleUrl: './app.css'
+  styleUrl: './app.css',
+  host: { '(document:keydown.escape)': 'closeDrawer()' },
 })
 export class App {
   private readonly collections = inject(CollectionApi);
@@ -32,6 +35,9 @@ export class App {
 
   readonly movieCollections = computed(() => this.collections.forType('MOVIE'));
   readonly bookCollections = computed(() => this.collections.forType('BOOK'));
+
+  // The sidebar is a slide-over below md:, part of the layout from md: up.
+  readonly drawerOpen = signal(false);
 
   // Sections the user folded away, kept across reloads.
   private readonly collapsedKey = 'keepory.sidebar.collapsed';
@@ -58,6 +64,18 @@ export class App {
     effect(() => {
       if (this.draggedItem()) this.dropError.set(null);
     });
+    // Picking a collection on a phone should reveal the shelf behind the drawer.
+    this.router.events
+      .pipe(filter((event) => event instanceof NavigationEnd))
+      .subscribe(() => this.closeDrawer());
+  }
+
+  toggleDrawer(): void {
+    this.drawerOpen.update((open) => !open);
+  }
+
+  closeDrawer(): void {
+    this.drawerOpen.set(false);
   }
 
   // Query params take part in the match so "Películas" and one of its collections

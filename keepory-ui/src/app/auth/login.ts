@@ -6,7 +6,7 @@ import { AuthApi } from './auth-api';
 @Component({
   selector: 'app-login',
   template: `
-    <div class="flex min-h-[70vh] items-center justify-center px-6">
+    <div class="flex min-h-[70dvh] items-center justify-center px-6">
       <div class="w-full max-w-sm">
         <h1 class="font-display text-4xl text-paper text-center">Keepory</h1>
         <p class="text-muted text-sm text-center mt-2 mb-8">Tu biblioteca de noche</p>
