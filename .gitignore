@@ -6,3 +6,5 @@
 *.local.ps1
 .env
 .env.*
+# Spring reads ./config/ automatically; that is where the Neon branch datasource lives.
+keepory-backend/config/
