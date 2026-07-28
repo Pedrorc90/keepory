@@ -48,7 +48,6 @@ Fuente de verdad del plan por fases. Claude lo lee al inicio de sesión y lo act
 ## Pendiente de decidir
 
 - F4.2: ¿seguir depurando Google Books o cambiar de proveedor (Open Library como fuente de datos, no solo de covers)?
-- **Rotar la contraseña de Neon (lo primero de la próxima sesión)**: la actual se pegó en un chat dos veces (2026-07-27). Al rotarla hay que actualizar `KEEPORY_DB_PASSWORD` en Render.
 - **Keep-alive de Render** (decidido 2026-07-28, sin implementar): monitor externo tipo UptimeRobot o cron-job.org con un `GET /` cada 10 min. Pegarle a `/` y no a un endpoint con DB, para no quemar las compute-hours de Neon — a cambio, la primera consulta tras 5 min de calma paga ~0,5 s de despertar a Neon. El free de Render da 750 h/mes de instancia: cabe un único servicio 24/7. Descartados: Starter de pago (7 $/mes) y GitHub Actions `schedule` (cron impuntual y se autodesactiva a los 60 días sin commits).
 
 ### Decisiones cerradas (para no reabrirlas)
@@ -56,3 +55,5 @@ Fuente de verdad del plan por fases. Claude lo lee al inicio de sesión y lo act
 - **Dónde despliega** (2026-07-26): Render + Neon, PaaS que Pedro ya conoce. Se descartó VPS único (~4,5 €/mes) por el mantenimiento, y GitHub Pages para la UI por el CORS/cookies cross-site que traería la auth.
 - **Un solo repo** (2026-07-27): monorepo. El `Dockerfile` multi-stage mete el bundle de Angular dentro del jar y Render despliega un único servicio; separar repos obligaría a publicar el bundle como artefacto entre ellos.
 - **Multiusuario con biblioteca aislada** (2026-07-27), no usuario único: los amigos van a usarla y dar feedback. Cuentas creadas a mano, sin registro abierto.
+- **Desarrollo local contra datos reales: rama `dev` de Neon** (2026-07-28), no el Postgres de docker-compose ni `main`. Es una copia copy-on-write con endpoint y contraseña propios, así que una migración rota cuesta un *Reset from parent* en vez de producción. La arranca `run-neon.local.ps1` (gitignored) exportando `KEEPORY_DB_*`; host **sin** `-pooler` por el advisory lock de Flyway, y `KEEPORY_ADMIN_*` en blanco para que `UserSeeder` no toque la cuenta owner que la rama ya trae. La rama es una foto, no un espejo: no sigue a `main`.
+- **Contraseñas de Neon rotadas** (2026-07-28), `main` y `dev` por separado: la de `main` se había pegado en un chat. Al rotar `main` hay que actualizar `KEEPORY_DB_PASSWORD` en Render (verificado ese día: `/api/items` responde 401 tras el redeploy). Una rama creada después de rotar hereda la contraseña del padre — hay que resetearla en la propia rama para que local no lleve la credencial de producción.
