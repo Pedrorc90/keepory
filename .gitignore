@@ -8,3 +8,6 @@
 .env.*
 # Spring reads ./config/ automatically; that is where the Neon branch datasource lives.
 keepory-backend/config/
+
+# Claude Code local settings (permissions per machine).
+.claude/settings.local.json
