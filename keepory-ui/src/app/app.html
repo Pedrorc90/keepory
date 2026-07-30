@@ -26,7 +26,6 @@
       </a>
       <span class="hidden text-sm text-muted sm:inline">lo visto, lo leído, lo vivido</span>
       <nav class="ml-auto flex items-center gap-4 text-sm">
-        <a routerLink="/suggestions" routerLinkActive="text-amber" class="text-muted transition hover:text-paper">Sugerencias</a>
         @if (user(); as current) {
           <span class="hidden text-muted sm:inline">{{ current.displayName }}</span>
           <button (click)="logout()" class="text-muted transition hover:text-paper">Salir</button>

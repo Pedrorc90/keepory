@@ -17,6 +17,9 @@ import {
   providerBadges,
 } from './item.model';
 
+/** Folders only, loose items only, or the whole shelf. */
+type ShelfView = 'collections' | 'items' | 'all';
+
 @Component({
   selector: 'app-item-list',
   imports: [RouterLink],
@@ -42,13 +45,8 @@ import {
           </button>
         </span>
       }
-      @if (result(); as page) {
-        <span class="text-sm text-muted">
-          {{ page.totalElements }} {{ shelfCollections().length ? 'sueltos' : 'en la estantería' }}
-          @if (shelfCollections().length; as total) {
-            · {{ total }} {{ total === 1 ? 'colección' : 'colecciones' }}
-          }
-        </span>
+      @if (countLabel(); as label) {
+        <span class="text-sm text-muted">{{ label }}</span>
       }
       <a
         routerLink="/items/new"
@@ -83,15 +81,33 @@ import {
       </aside>
 
       <div class="mt-7 min-w-0 flex-1 md:mt-0">
+    @if (!collectionId()) {
+      <nav
+        class="mx-auto mb-3 flex w-fit rounded-lg border border-line bg-panel/60 p-0.5 text-sm"
+        aria-label="Cambiar de vista"
+      >
+        @for (option of viewOptions(); track option.value) {
+          <button
+            (click)="changeView(option.value)"
+            [attr.aria-pressed]="view() === option.value"
+            class="rounded-md px-3 py-1.5 transition"
+            [class]="view() === option.value ? 'bg-amber/15 text-paper' : 'text-muted hover:text-paper'"
+          >
+            {{ option.label }}
+          </button>
+        }
+      </nav>
+    }
     <div class="flex flex-wrap items-center gap-2">
       <input
         type="search"
         [value]="q()"
         (input)="search($any($event.target).value)"
-        placeholder="Buscar por título…"
+        [placeholder]="view() === 'collections' ? 'Buscar colección…' : 'Buscar por título…'"
         class="min-w-48 flex-1 rounded-md border border-line bg-panel px-3 py-2 text-sm placeholder:text-muted focus:border-amber focus:outline-none"
-        aria-label="Buscar por título"
+        [attr.aria-label]="view() === 'collections' ? 'Buscar colección' : 'Buscar por título'"
       />
+      @if (view() !== 'collections') {
       <label class="flex items-center gap-2 text-sm text-muted">
         Ordenar por
         <select
@@ -104,23 +120,54 @@ import {
           }
         </select>
       </label>
+      }
     </div>
+
+    <a
+      routerLink="/suggestions"
+      class="group mx-auto mt-3 flex w-fit items-center gap-2 rounded-full border border-line bg-panel/60 py-1.5 pl-3 pr-3.5 text-sm text-muted transition hover:border-amber/60 hover:bg-amber/10 hover:text-paper"
+    >
+      <svg
+        class="h-3.5 w-3.5 text-amber/80 transition group-hover:text-amber"
+        viewBox="0 0 16 16"
+        fill="currentColor"
+        aria-hidden="true"
+      >
+        <path d="M6.5 1l1.3 4.2L12 6.5 7.8 7.8 6.5 12 5.2 7.8 1 6.5l4.2-1.3z" />
+        <path d="M12 9l.7 2.3 2.3.7-2.3.7-.7 2.3-.7-2.3L9 12l2.3-.7z" />
+      </svg>
+      Descubrir
+      <span class="inline-block text-muted/60 transition group-hover:translate-x-0.5 group-hover:text-amber">
+        →
+      </span>
+    </a>
 
     @if (error()) {
       <p class="mt-8 rounded-md border border-rust/50 bg-rust/10 px-4 py-3 text-sm">{{ error() }}</p>
     } @else if (loading() && !result()) {
       <p class="mt-8 text-sm text-muted">Cargando la estantería…</p>
     } @else if (result(); as page) {
-      @if (page.content.length === 0 && shelfCollections().length === 0) {
+      @if (visibleItems().length === 0 && shelfCollections().length === 0) {
         <div class="mt-14 text-center">
-          <p class="font-display text-xl">La estantería está vacía</p>
-          <p class="mt-2 text-sm text-muted">
-            @if (hasFilters()) {
-              Ningún elemento coincide con los filtros.
-            } @else {
-              Añade la primera película o libro para empezar.
-            }
-          </p>
+          @if (view() === 'collections' && !collectionId()) {
+            <p class="font-display text-xl">No hay colecciones</p>
+            <p class="mt-2 text-sm text-muted">
+              @if (q().trim()) {
+                Ninguna colección se llama así.
+              } @else {
+                Créalas desde el panel de la izquierda o con ＋ en una tarjeta.
+              }
+            </p>
+          } @else {
+            <p class="font-display text-xl">La estantería está vacía</p>
+            <p class="mt-2 text-sm text-muted">
+              @if (hasFilters()) {
+                Ningún elemento coincide con los filtros.
+              } @else {
+                Añade la primera película o libro para empezar.
+              }
+            </p>
+          }
         </div>
       } @else {
         <ul class="mt-7 grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9">
@@ -135,46 +182,66 @@ import {
                 (dragleave)="onCollectionDragLeave(collection)"
                 (drop)="onCollectionDrop($event, collection)"
               >
-                <div
-                  class="relative aspect-2/3 overflow-hidden rounded-md bg-panel transition duration-200 group-hover:-translate-y-1 group-hover:shadow-lg group-hover:shadow-black/40"
-                  [class]="
-                    dropTarget() === collection.id
-                      ? 'ring-2 ring-amber'
-                      : 'ring-1 ring-amber/25 group-hover:ring-amber/60'
-                  "
-                >
-                  @if (collection.covers.length >= 4) {
-                    <div class="grid h-full w-full grid-cols-2 grid-rows-2 gap-px">
-                      @for (cover of collection.covers; track cover) {
-                        <img [src]="cover" alt="" class="h-full w-full object-cover" loading="lazy" draggable="false" />
-                      }
-                    </div>
-                  } @else if (collection.covers.length) {
-                    <img
-                      [src]="collection.covers[0]"
-                      alt=""
-                      class="h-full w-full object-cover"
-                      loading="lazy"
-                      draggable="false"
-                    />
-                  } @else {
-                    <div class="flex h-full items-center justify-center p-4 text-center font-display text-lg text-muted">
-                      {{ collection.name }}
-                    </div>
-                  }
-                  <span class="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/80 via-ink/10 to-ink/30"></span>
-                  <span class="absolute left-2 top-2 flex items-center gap-1 rounded bg-ink/75 px-1.5 py-0.5 text-xs text-amber">
-                    <svg class="h-3 w-3" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                      <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.2l1.5 1.6h6.3A1.5 1.5 0 0 1 15 5.1v7.4A1.5 1.5 0 0 1 13.5 14h-11A1.5 1.5 0 0 1 1 12.5z" />
-                    </svg>
-                    {{ collection.itemCount }}
-                  </span>
+                <!-- A folder: a tab on top, covers filed inside, and a front flap
+                     that covers their lower half so they read as tucked in. -->
+                <div class="relative aspect-2/3 transition duration-200 group-hover:-translate-y-1">
+                  <span
+                    class="absolute left-0 top-0 h-[8%] w-[46%] rounded-t-md border border-b-0 bg-panel transition"
+                    [class]="dropTarget() === collection.id ? 'border-amber' : 'border-amber/25 group-hover:border-amber/60'"
+                  ></span>
+                  <div
+                    class="absolute inset-x-0 bottom-0 top-[6.5%] overflow-hidden rounded-md rounded-tl-none border bg-panel transition group-hover:shadow-lg group-hover:shadow-black/40"
+                    [class]="dropTarget() === collection.id ? 'border-amber' : 'border-amber/25 group-hover:border-amber/60'"
+                  >
+                    @if (collection.covers.length >= 4) {
+                      <div class="absolute inset-[6%] grid grid-cols-2 grid-rows-2 gap-1">
+                        @for (cover of collection.covers; track cover) {
+                          <img
+                            [src]="cover"
+                            alt=""
+                            class="h-full w-full rounded-sm object-cover shadow-sm shadow-black/40"
+                            loading="lazy"
+                            draggable="false"
+                          />
+                        }
+                      </div>
+                    } @else if (collection.covers.length) {
+                      <div class="absolute inset-[6%] flex justify-center gap-1">
+                        @for (cover of collection.covers; track cover) {
+                          <img
+                            [src]="cover"
+                            alt=""
+                            class="h-full min-w-0 max-w-[52%] flex-1 rounded-sm object-cover shadow-sm shadow-black/40"
+                            loading="lazy"
+                            draggable="false"
+                          />
+                        }
+                      </div>
+                    } @else {
+                      <div class="flex h-full items-center justify-center p-4 pb-[35%] text-center font-display text-muted">
+                        Vacía
+                      </div>
+                    }
+                    <!-- The flap: opaque at the bottom, fading where the covers slide behind it. -->
+                    <span
+                      class="pointer-events-none absolute inset-x-0 bottom-0 h-[36%] bg-gradient-to-t from-panel via-panel to-panel/70"
+                    ></span>
+                    <span
+                      class="pointer-events-none absolute inset-x-0 bottom-[36%] h-px bg-amber/20"
+                    ></span>
+                    <span class="absolute bottom-2 left-2 flex items-center gap-1 text-xs text-amber">
+                      <svg class="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                        <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.2l1.5 1.6h6.3A1.5 1.5 0 0 1 15 5.1v7.4A1.5 1.5 0 0 1 13.5 14h-11A1.5 1.5 0 0 1 1 12.5z" />
+                      </svg>
+                      {{ collection.itemCount }}
+                    </span>
+                  </div>
                 </div>
               </a>
               <p class="mt-2 truncate text-sm">{{ collection.name }}</p>
             </li>
           }
-          @for (item of page.content; track item.id) {
+          @for (item of visibleItems(); track item.id) {
             <li class="group" [class.opacity-40]="draggingId() === item.id">
               <a
                 [routerLink]="['/items', item.id, 'edit']"
@@ -268,7 +335,7 @@ import {
           }
         </ul>
 
-        @if (page.totalPages > 1) {
+        @if (page.totalPages > 1 && view() !== 'collections') {
           <nav class="mt-8 flex items-center justify-center gap-4 text-sm" aria-label="Paginación">
             <button
               (click)="goTo(page.number - 1)"
@@ -383,6 +450,26 @@ export class ItemList {
   readonly sort = signal<ItemSort>('recent');
   readonly status = signal<ItemStatus | ''>('');
   readonly q = signal('');
+
+  // Which shelf the user is looking at, kept across reloads and route changes.
+  private readonly viewKey = 'keepory.shelf.view';
+  readonly view = signal<ShelfView>(this.readView());
+  readonly viewOptions = computed(() => [
+    { value: 'collections' as ShelfView, label: 'Colecciones' },
+    { value: 'items' as ShelfView, label: this.itemsLabel() },
+    { value: 'all' as ShelfView, label: 'Todo' },
+  ]);
+  private itemsLabel(): string {
+    switch (this.type()) {
+      case 'MOVIE':
+        return 'Películas';
+      case 'BOOK':
+        return 'Libros';
+      default:
+        return 'Sueltos';
+    }
+  }
+
   readonly collectionId = signal<string | null>(null);
   readonly activeCollection = computed(() => {
     const id = this.collectionId();
@@ -392,12 +479,29 @@ export class ItemList {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
 
-  /** Browsing the shelf: collections show as cards and their items stay inside them. */
-  readonly excludeCollected = computed(() => !this.collectionId() && !this.hasFilters());
+  /** "Sueltos" hides what already lives in a collection; "Todo" shows the whole shelf. */
+  readonly excludeCollected = computed(() => !this.collectionId() && this.view() !== 'all');
   readonly shelfCollections = computed(() => {
+    if (this.collectionId() || this.view() === 'items') return [];
     // Cards ride along with the first page only; paging counts items, not collections.
-    if (!this.excludeCollected() || (this.result()?.number ?? 0) > 0) return [];
-    return this.collections.forType(this.type());
+    if ((this.result()?.number ?? 0) > 0) return [];
+    const all = this.collections.forType(this.type());
+    // In the collections view the search box filters folders by name instead of titles.
+    const needle = this.view() === 'collections' ? this.q().trim().toLowerCase() : '';
+    return needle ? all.filter((c) => c.name.toLowerCase().includes(needle)) : all;
+  });
+  readonly visibleItems = computed(() =>
+    this.view() === 'collections' && !this.collectionId() ? [] : (this.result()?.content ?? []),
+  );
+  readonly countLabel = computed(() => {
+    const folders = this.shelfCollections().length;
+    const total = this.result()?.totalElements ?? 0;
+    if (this.view() === 'collections' && !this.collectionId()) {
+      return `${folders} ${folders === 1 ? 'colección' : 'colecciones'}`;
+    }
+    if (!this.result()) return '';
+    const items = `${total} ${this.view() === 'items' && !this.collectionId() ? 'sueltos' : 'en la estantería'}`;
+    return folders ? `${items} · ${folders} ${folders === 1 ? 'colección' : 'colecciones'}` : items;
   });
   readonly dropTarget = signal<string | null>(null);
 
@@ -460,6 +564,27 @@ export class ItemList {
           this.loading.set(false);
         },
       });
+  }
+
+  changeView(value: ShelfView): void {
+    if (this.view() === value) return;
+    this.view.set(value);
+    this.page = 0;
+    try {
+      localStorage.setItem(this.viewKey, value);
+    } catch {
+      // Private mode without storage: the view just does not survive a reload.
+    }
+    this.load();
+  }
+
+  private readView(): ShelfView {
+    try {
+      const stored = localStorage.getItem(this.viewKey);
+      return stored === 'collections' || stored === 'items' ? stored : 'all';
+    } catch {
+      return 'all';
+    }
   }
 
   filterByStatus(value: string): void {
