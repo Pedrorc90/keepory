@@ -29,3 +29,34 @@ body {
 }
 
 .tile-leave { animation: tile-out 0.2s ease-in forwards; }
+
+/* Deck card flying off after a swipe; --fly-x/y carry the release position so
+   the exit continues the gesture instead of restarting from the centre. */
+@keyframes card-fly-right {
+  to { transform: translate(calc(var(--fly-x) + 140%), var(--fly-y)) rotate(18deg); opacity: 0; }
+}
+@keyframes card-fly-left {
+  to { transform: translate(calc(var(--fly-x) - 140%), var(--fly-y)) rotate(-18deg); opacity: 0; }
+}
+@keyframes card-fly-up {
+  to { transform: translate(var(--fly-x), calc(var(--fly-y) - 140%)); opacity: 0; }
+}
+
+.card-fly-right { animation: card-fly-right 0.28s ease-in forwards; }
+.card-fly-left { animation: card-fly-left 0.28s ease-in forwards; }
+.card-fly-up { animation: card-fly-up 0.28s ease-in forwards; }
+
+@keyframes card-enter {
+  from { transform: scale(0.94) translateY(10px); opacity: 0; }
+}
+
+.card-enter { animation: card-enter 0.22s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .card-fly-right,
+  .card-fly-left,
+  .card-fly-up,
+  .card-enter {
+    animation-duration: 0.01s;
+  }
+}

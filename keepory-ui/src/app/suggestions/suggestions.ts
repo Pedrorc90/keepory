@@ -1,8 +1,12 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { map } from 'rxjs';
 import { ItemType } from '../items/item.model';
-import { Suggestion, SuggestionApi, SuggestionDeck } from './suggestion-api';
+import { Suggestion, SuggestionApi, SuggestionDeck, SuggestionGenre } from './suggestion-api';
+import { SuggestionDeckView } from './suggestion-deck';
 import { SuggestionRow } from './suggestion-row';
+
+/** Below this width the suggestions become a swipeable deck. */
+const DESKTOP_QUERY = '(min-width: 768px)';
 
 interface SuggestionTexts {
   tagline: string;
@@ -14,7 +18,7 @@ interface SuggestionTexts {
 
 @Component({
   selector: 'app-suggestions',
-  imports: [SuggestionRow],
+  imports: [SuggestionRow, SuggestionDeckView],
   template: `
     <div>
       <h1 class="text-center font-display text-3xl font-semibold">Sugerencias</h1>
@@ -36,6 +40,27 @@ interface SuggestionTexts {
         }
       </div>
 
+      @if (type() === 'MOVIE' && genres().length) {
+        <div class="mx-auto mt-4 flex max-w-3xl flex-wrap justify-center gap-1.5">
+          <button
+            type="button"
+            (click)="setGenre(null)"
+            [class]="genre() === null ? activeChip : idleChip"
+          >
+            Todos
+          </button>
+          @for (g of genres(); track g.deckId) {
+            <button
+              type="button"
+              (click)="setGenre(g.deckId)"
+              [class]="genre() === g.deckId ? activeChip : idleChip"
+            >
+              {{ g.name }}
+            </button>
+          }
+        </div>
+      }
+
       @if (loading()) {
         <p class="mt-12 text-center text-sm text-muted">Buscando sugerencias…</p>
       } @else if (loadError()) {
@@ -49,38 +74,44 @@ interface SuggestionTexts {
             {{ refreshError() }}
           </p>
         }
-        <div class="mx-auto mt-8 space-y-8 sm:w-fit">
-          @for (section of sections(); track section.id) {
-            <section>
-              <div class="flex items-center gap-2">
+        @if (desktop()) {
+          <div class="mx-auto mt-8 space-y-8 sm:w-fit">
+            @for (section of sections(); track section.id) {
+              <section>
                 <h2 class="font-display text-lg font-semibold text-amber">{{ section.title }}</h2>
-                <button
-                  type="button"
-                  (click)="refreshSection(section.id)"
-                  [disabled]="refreshingId() !== null"
-                  title="Refrescar fila"
-                  aria-label="Refrescar fila"
-                  class="text-lg leading-none text-muted transition enabled:hover:text-amber disabled:opacity-50"
-                  [class.animate-spin]="refreshingId() === section.id"
-                >
-                  ↻
-                </button>
-              </div>
-              <app-suggestion-row
-                class="mt-3 block"
-                [suggestions]="section.suggestions"
-                [type]="type()"
-                [completedLabel]="labels().completed"
-                [duplicateMessage]="labels().duplicate"
-                (reload)="refreshSection(section.id)"
-              />
-            </section>
-          }
-        </div>
+                <app-suggestion-row
+                  class="mt-3 block"
+                  [suggestions]="section.suggestions"
+                  [type]="type()"
+                  [completedLabel]="labels().completed"
+                  [duplicateMessage]="labels().duplicate"
+                  [refreshing]="refreshingId() === section.id"
+                  (reload)="refreshSection(section.id)"
+                />
+              </section>
+            }
+          </div>
+        } @else {
+          <app-suggestion-deck
+            class="mx-auto mt-6 block max-w-xs"
+            [sections]="sections()"
+            [type]="type()"
+            [completedLabel]="labels().completed"
+            [duplicateMessage]="labels().duplicate"
+            [refreshing]="loading()"
+            (reload)="load()"
+          />
+        }
       } @else {
         <div class="mt-12 text-center text-sm text-muted">
           <p>No hay más sugerencias por ahora.</p>
-          <p class="mt-1">{{ labels().emptyHint }}</p>
+          <p class="mt-1">
+            @if (genre()) {
+              Ya tienes o has descartado lo más popular de este género.
+            } @else {
+              {{ labels().emptyHint }}
+            }
+          </p>
           <button type="button" (click)="load()" class="mt-4 text-sm text-amber underline">
             Buscar de nuevo
           </button>
@@ -96,7 +127,7 @@ export class Suggestions {
   readonly typeTabs: Record<ItemType, string> = { MOVIE: 'Películas', BOOK: 'Libros' };
   private readonly texts: Record<ItemType, SuggestionTexts> = {
     MOVIE: {
-      tagline: 'Filas según lo que has visto, tus pendientes y tus géneros favoritos.',
+      tagline: 'Novedades y filas según lo que has visto y tus pendientes. Filtra por género.',
       completed: 'Vista',
       duplicate: 'Esta película ya está en tu colección.',
       emptyHint: 'Añade películas completadas o pendientes para afinar las sugerencias.',
@@ -111,15 +142,28 @@ export class Suggestions {
     },
   };
 
+  readonly activeChip = 'rounded-full border border-amber bg-amber/15 px-3 py-1 text-xs text-paper';
+  readonly idleChip =
+    'rounded-full border border-line px-3 py-1 text-xs text-muted transition hover:border-amber/60 hover:text-paper';
+
   readonly type = signal<ItemType>('MOVIE');
   readonly labels = computed(() => this.texts[this.type()]);
   readonly sections = signal<SuggestionDeck[]>([]);
+  readonly genres = signal<SuggestionGenre[]>([]);
+  /** Deck id of the genre being browsed; null means the personalized rows. */
+  readonly genre = signal<string | null>(null);
   readonly loading = signal(true);
   readonly loadError = signal<string | null>(null);
   readonly refreshingId = signal<string | null>(null);
   readonly refreshError = signal<string | null>(null);
 
+  private readonly desktopQuery = matchMedia(DESKTOP_QUERY);
+  /** Rows on desktop, swipeable deck on phones. */
+  readonly desktop = signal(this.desktopQuery.matches);
+
   constructor() {
+    this.desktopQuery.addEventListener('change', (e) => this.desktop.set(e.matches));
+    this.loadGenres();
     this.load();
   }
 
@@ -128,6 +172,16 @@ export class Suggestions {
       return;
     }
     this.type.set(type);
+    // Genres only exist for movies; going back to them starts unfiltered.
+    this.genre.set(null);
+    this.load();
+  }
+
+  setGenre(deckId: string | null): void {
+    if (this.genre() === deckId) {
+      return;
+    }
+    this.genre.set(deckId);
     this.load();
   }
 
@@ -135,14 +189,19 @@ export class Suggestions {
     this.loading.set(true);
     this.loadError.set(null);
     this.refreshError.set(null);
+    const genre = this.genre();
     const sections$ =
-      this.type() === 'MOVIE'
-        ? this.suggestionApi.movieDecks()
-        : this.suggestionApi.books().pipe(
+      this.type() === 'BOOK'
+        ? this.suggestionApi.books().pipe(
             map((suggestions): SuggestionDeck[] =>
               suggestions.length ? [this.bookSection(suggestions)] : [],
             ),
-          );
+          )
+        : genre
+          ? this.suggestionApi.movieDeck(genre).pipe(
+              map((deck): SuggestionDeck[] => (deck.suggestions.length ? [deck] : [])),
+            )
+          : this.suggestionApi.movieDecks();
     sections$.subscribe({
       next: (sections) => {
         this.sections.set(sections);
@@ -163,7 +222,7 @@ export class Suggestions {
     this.refreshError.set(null);
     const deck$ =
       this.type() === 'MOVIE'
-        ? this.suggestionApi.movieDeck(id)
+        ? this.suggestionApi.movieDeck(id, true)
         : this.suggestionApi.books().pipe(map((suggestions) => this.bookSection(suggestions)));
     deck$.subscribe({
       next: (deck) => {
@@ -174,6 +233,14 @@ export class Suggestions {
         this.refreshError.set('No se pudo refrescar la fila.');
         this.refreshingId.set(null);
       },
+    });
+  }
+
+  // Without the TMDB key this fails; the chips just stay hidden.
+  private loadGenres(): void {
+    this.suggestionApi.movieGenres().subscribe({
+      next: (genres) => this.genres.set(genres),
+      error: () => this.genres.set([]),
     });
   }
 
