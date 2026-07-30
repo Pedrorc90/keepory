@@ -18,6 +18,11 @@ export interface SuggestionDeck {
   suggestions: Suggestion[];
 }
 
+export interface SuggestionGenre {
+  deckId: string;
+  name: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class SuggestionApi {
   private readonly http = inject(HttpClient);
@@ -27,8 +32,15 @@ export class SuggestionApi {
     return this.http.get<SuggestionDeck[]>(`${this.baseUrl}/movies`);
   }
 
-  movieDeck(id: string): Observable<SuggestionDeck> {
-    return this.http.get<SuggestionDeck>(`${this.baseUrl}/movies/${id}`);
+  movieGenres(): Observable<SuggestionGenre[]> {
+    return this.http.get<SuggestionGenre[]>(`${this.baseUrl}/movies/genres`);
+  }
+
+  /** `refresh` asks for a further page instead of the genre's most popular. */
+  movieDeck(id: string, refresh = false): Observable<SuggestionDeck> {
+    return this.http.get<SuggestionDeck>(`${this.baseUrl}/movies/${id}`, {
+      params: refresh ? { refresh: true } : {},
+    });
   }
 
   books(): Observable<Suggestion[]> {

@@ -2,12 +2,14 @@ package com.keepory.suggestion;
 
 import com.keepory.suggestion.dto.Suggestion;
 import com.keepory.suggestion.dto.SuggestionDeck;
+import com.keepory.suggestion.dto.SuggestionGenre;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -28,9 +30,15 @@ public class SuggestionController {
         return service.movieDecks();
     }
 
+    @GetMapping("/movies/genres")
+    public List<SuggestionGenre> movieGenres() {
+        return service.movieGenres();
+    }
+
     @GetMapping("/movies/{deckId}")
-    public SuggestionDeck movieDeck(@PathVariable String deckId) {
-        return service.movieDeck(deckId);
+    public SuggestionDeck movieDeck(@PathVariable String deckId,
+                                    @RequestParam(defaultValue = "false") boolean refresh) {
+        return service.movieDeck(deckId, refresh);
     }
 
     @GetMapping("/books")

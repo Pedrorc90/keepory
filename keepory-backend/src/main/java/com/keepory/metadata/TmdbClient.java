@@ -100,6 +100,16 @@ public class TmdbClient {
                 .build(), MovieListResponse.class));
     }
 
+    // Released in the last weeks in Spain; the shelf's "what's new" row.
+    public List<Suggestion> nowPlaying(int page) {
+        return suggestions(get(uri -> uri.path("/movie/now_playing")
+                .queryParam("region", WATCH_REGION)
+                .queryParam("page", page)
+                .queryParam("language", LANGUAGE)
+                .queryParam("api_key", apiKey)
+                .build(), MovieListResponse.class));
+    }
+
     public Map<String, Integer> genreIdsByName() {
         Map<String, Integer> cached = genreIdsByName;
         if (cached == null) {
