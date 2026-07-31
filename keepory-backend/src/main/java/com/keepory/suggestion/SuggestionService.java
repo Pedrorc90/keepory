@@ -11,10 +11,12 @@ import com.keepory.metadata.TmdbClient;
 import com.keepory.suggestion.dto.Suggestion;
 import com.keepory.suggestion.dto.SuggestionDeck;
 import com.keepory.suggestion.dto.SuggestionGenre;
+import com.keepory.suggestion.dto.SuggestionPage;
 import org.springframework.stereotype.Service;
 
 import java.text.Normalizer;
 import java.time.OffsetDateTime;
+import java.time.Year;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -28,7 +30,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Function;
-import java.util.function.IntFunction;
 import java.util.stream.Collectors;
 
 @Service
@@ -36,15 +37,26 @@ public class SuggestionService {
 
     private static final int MAX_SEEDS = 5;
     private static final int SEEDS_PER_DECK = 3;
-    private static final int MAX_PAGES = 3;
     private static final int DECK_SIZE = 15;
     private static final int MAX_RESULTS = 20;
     private static final int DISMISSAL_COOLDOWN_DAYS = 30;
+    // Requests a single deck may spend on TMDB before settling for what it has.
+    private static final int MAX_REQUESTS = 8;
+    // Tried in order: a deck that runs dry at one vote floor drops to the next
+    // instead of coming back short. 0 means no floor at all, and every genre has
+    // thousands of titles once the floor is gone.
+    private static final int[] VOTE_FLOORS = {200, 50, 10, 0};
+    // now_playing takes no vote filter, so relaxing it would just refetch page 1.
+    private static final int[] NO_FLOORS = {0};
+    private static final int OLDEST_DECADE = 1990;
     private static final String LATEST_DECK_ID = "latest";
     private static final String LATEST_TITLE = "Novedades en cartelera";
     private static final String COMPLETED_TITLE = "Afines a tus vistas";
     private static final String PENDING_TITLE = "Afines a tus pendientes";
     private static final String GENRE_PREFIX = "genre-";
+    private static final String DECADE_PREFIX = "decade-";
+    private static final String GENRE_GROUP = "Géneros";
+    private static final String DECADE_GROUP = "Décadas";
 
     private final ItemRepository items;
     private final SuggestionDismissalRepository dismissals;
@@ -70,21 +82,48 @@ public class SuggestionService {
         List<SuggestionDeck> decks = new ArrayList<>();
         // What is out right now leads: it is the only row that does not depend on
         // the shelf, so it has something to show even for an empty library.
-        addDeck(decks, excluded, LATEST_DECK_ID, LATEST_TITLE, latestDeck(1, excluded));
+        addDeck(decks, excluded, LATEST_DECK_ID, LATEST_TITLE,
+                fill((page, floor) -> tmdb.nowPlaying(page), false, excluded, NO_FLOORS));
         addDeck(decks, excluded, "completed", COMPLETED_TITLE,
                 statusDeck(movies, ItemStatus.COMPLETED, excluded));
         addDeck(decks, excluded, "pending", PENDING_TITLE,
                 statusDeck(movies, ItemStatus.PENDING, excluded));
         // No genre rows here: genres are browsable from the chips instead.
-        return decks;
+        return decks.stream().map(this::enriched).toList();
     }
 
-    /** Every genre the user can browse, ordered as TMDB's localized catalog. */
+    // Providers and trailers cost one TMDB call per title, so they are fetched
+    // for the final deck instead of every candidate fill() walked past.
+    private SuggestionDeck enriched(SuggestionDeck deck) {
+        return new SuggestionDeck(deck.id(), deck.title(), tmdb.enrich(deck.suggestions()));
+    }
+
+    /** Every chip the user can browse, in the order the UI stacks the rows. */
     public List<SuggestionGenre> movieGenres() {
+        List<SuggestionGenre> facets = new ArrayList<>(genreFacets());
+        facets.addAll(decadeFacets());
+        return facets;
+    }
+
+    private List<SuggestionGenre> genreFacets() {
         return tmdb.genreIdsByName().entrySet().stream()
-                .map(entry -> new SuggestionGenre(GENRE_PREFIX + entry.getValue(), capitalize(entry.getKey())))
+                .map(entry -> new SuggestionGenre(GENRE_PREFIX + entry.getValue(),
+                        capitalize(entry.getKey()), GENRE_GROUP))
                 .sorted(Comparator.comparing(SuggestionGenre::name))
                 .toList();
+    }
+
+    private static List<SuggestionGenre> decadeFacets() {
+        List<SuggestionGenre> decades = new ArrayList<>();
+        for (int year = (Year.now().getValue() / 10) * 10; year >= OLDEST_DECADE; year -= 10) {
+            decades.add(new SuggestionGenre(DECADE_PREFIX + year, decadeName(year), DECADE_GROUP));
+        }
+        return decades;
+    }
+
+    // "Años 90" reads better than "Años 1990"; from 2000 on the full year wins.
+    private static String decadeName(int startYear) {
+        return startYear >= 2000 ? "Años " + startYear : "Años " + (startYear % 100);
     }
 
     // Builds a single deck: on first open ({@code refresh} false) it serves the
@@ -95,36 +134,47 @@ public class SuggestionService {
         List<Item> movies = items.findByTypeAndSourceAndUserIdAndDeletedAtIsNull(
                 ItemType.MOVIE, TmdbClient.SOURCE, currentUser.id());
         Set<String> excluded = baseExclusions(movies);
-        return switch (deckId) {
+        return enriched(switch (deckId) {
             case LATEST_DECK_ID -> new SuggestionDeck(deckId, LATEST_TITLE,
-                    // Only a couple of pages are actually in theatres.
-                    latestDeck(refresh ? 1 + ThreadLocalRandom.current().nextInt(2) : 1, excluded));
+                    fill((page, floor) -> tmdb.nowPlaying(page), refresh, excluded, NO_FLOORS));
             case "completed" -> new SuggestionDeck(deckId, COMPLETED_TITLE,
                     statusDeck(movies, ItemStatus.COMPLETED, excluded));
             case "pending" -> new SuggestionDeck(deckId, PENDING_TITLE,
                     statusDeck(movies, ItemStatus.PENDING, excluded));
-            default -> genreDeckById(deckId, refresh, excluded);
-        };
+            default -> browsableDeck(deckId, refresh, excluded);
+        });
     }
 
-    private SuggestionDeck genreDeckById(String deckId, boolean refresh, Set<String> excluded) {
-        if (!deckId.startsWith(GENRE_PREFIX)) {
-            throw new IllegalArgumentException("Unknown deck id: " + deckId);
+    private SuggestionDeck browsableDeck(String deckId, boolean refresh, Set<String> excluded) {
+        if (deckId.startsWith(GENRE_PREFIX)) {
+            int genreId = idIn(deckId, GENRE_PREFIX);
+            return new SuggestionDeck(deckId, capitalize(genreName(genreId)),
+                    fill((page, floor) -> tmdb.discoverByGenre(genreId, page, floor),
+                            refresh, excluded, VOTE_FLOORS));
         }
-        int genreId = Integer.parseInt(deckId.substring(GENRE_PREFIX.length()));
-        String name = tmdb.genreIdsByName().entrySet().stream()
+        if (deckId.startsWith(DECADE_PREFIX)) {
+            int startYear = idIn(deckId, DECADE_PREFIX);
+            return new SuggestionDeck(deckId, decadeName(startYear),
+                    fill((page, floor) -> tmdb.discoverByDecade(startYear, page, floor),
+                            refresh, excluded, VOTE_FLOORS));
+        }
+        throw new IllegalArgumentException("Unknown deck id: " + deckId);
+    }
+
+    private static int idIn(String deckId, String prefix) {
+        try {
+            return Integer.parseInt(deckId.substring(prefix.length()));
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException("Unknown deck id: " + deckId, ex);
+        }
+    }
+
+    private String genreName(int genreId) {
+        return tmdb.genreIdsByName().entrySet().stream()
                 .filter(entry -> entry.getValue() == genreId)
                 .map(Map.Entry::getKey)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Unknown genre id: " + genreId));
-        // Discover is deterministic; a random page window makes each refresh
-        // surface new titles. Fall back to the top pages past the catalog end.
-        int startPage = refresh ? 2 + ThreadLocalRandom.current().nextInt(5) : 1;
-        List<Suggestion> found = genreDeck(genreId, startPage, excluded);
-        if (found.isEmpty() && startPage > 1) {
-            found = genreDeck(genreId, 1, excluded);
-        }
-        return new SuggestionDeck(deckId, capitalize(name), found);
     }
 
     private Set<String> baseExclusions(List<Item> movies) {
@@ -148,31 +198,48 @@ public class SuggestionService {
         return top(byId, s -> hits.get(s.externalId()), DECK_SIZE);
     }
 
-    private List<Suggestion> genreDeck(int genreId, int startPage, Set<String> excluded) {
-        return paged(page -> tmdb.discoverByGenre(genreId, page), startPage, excluded);
+    @FunctionalInterface
+    private interface PageFetcher {
+        SuggestionPage fetch(int page, int voteFloor);
     }
 
-    private List<Suggestion> latestDeck(int startPage, Set<String> excluded) {
-        return paged(tmdb::nowPlaying, startPage, excluded);
-    }
-
-    // Genres share the same popular titles and earlier decks consume candidates,
-    // so a single page often thins out; fetch more pages only as needed.
-    private List<Suggestion> paged(IntFunction<List<Suggestion>> fetch, int startPage, Set<String> excluded) {
+    // A deck should not come back empty. Earlier decks and the shelf itself eat
+    // the popular pages, so this walks every page the query really has — wrapping
+    // around from a random start when refreshing — and only then drops to a lower
+    // vote floor. Bounded by MAX_REQUESTS so a niche chip cannot stall the page.
+    private List<Suggestion> fill(PageFetcher fetcher, boolean refresh, Set<String> excluded,
+                                  int[] voteFloors) {
         List<Suggestion> found = new ArrayList<>();
         Set<String> ids = new HashSet<>();
-        for (int page = startPage; page < startPage + MAX_PAGES && found.size() < DECK_SIZE; page++) {
-            List<Suggestion> results = fetch.apply(page);
-            if (results.isEmpty()) {
-                break;
+        int requests = 0;
+        for (int voteFloor : voteFloors) {
+            SuggestionPage first = fetcher.fetch(1, voteFloor);
+            requests++;
+            int totalPages = first.totalPages();
+            if (totalPages < 1) {
+                continue;
             }
-            for (Suggestion suggestion : results) {
-                if (found.size() >= DECK_SIZE) {
-                    break;
+            int start = refresh ? 1 + ThreadLocalRandom.current().nextInt(totalPages) : 1;
+            for (int i = 0; i < totalPages && found.size() < DECK_SIZE && requests <= MAX_REQUESTS; i++) {
+                int page = 1 + ((start - 1 + i) % totalPages);
+                List<Suggestion> results;
+                if (page == 1) {
+                    results = first.results();
+                } else {
+                    results = fetcher.fetch(page, voteFloor).results();
+                    requests++;
                 }
-                if (!excluded.contains(suggestion.externalId()) && ids.add(suggestion.externalId())) {
-                    found.add(suggestion);
+                for (Suggestion suggestion : results) {
+                    if (found.size() >= DECK_SIZE) {
+                        break;
+                    }
+                    if (!excluded.contains(suggestion.externalId()) && ids.add(suggestion.externalId())) {
+                        found.add(suggestion);
+                    }
                 }
+            }
+            if (found.size() >= DECK_SIZE || requests > MAX_REQUESTS) {
+                break;
             }
         }
         return found;

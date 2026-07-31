@@ -10,6 +10,14 @@ export interface Suggestion {
   coverUrl: string | null;
   overview: string | null;
   voteAverage: number | null;
+  /** Streaming services with a flat-rate offer in Spain. */
+  providers: string[];
+  /** YouTube key of the trailer, null when the title has none. */
+  trailerKey: string | null;
+}
+
+export function trailerUrl(suggestion: Suggestion): string {
+  return `https://www.youtube.com/watch?v=${suggestion.trailerKey}`;
 }
 
 export interface SuggestionDeck {
@@ -21,6 +29,8 @@ export interface SuggestionDeck {
 export interface SuggestionGenre {
   deckId: string;
   name: string;
+  /** Row the chip belongs to: género, década o director. */
+  group: string;
 }
 
 @Injectable({ providedIn: 'root' })

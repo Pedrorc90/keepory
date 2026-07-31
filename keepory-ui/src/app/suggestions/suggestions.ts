@@ -40,23 +40,34 @@ interface SuggestionTexts {
         }
       </div>
 
-      @if (type() === 'MOVIE' && genres().length) {
-        <div class="mx-auto mt-4 flex max-w-3xl flex-wrap justify-center gap-1.5">
-          <button
-            type="button"
-            (click)="setGenre(null)"
-            [class]="genre() === null ? activeChip : idleChip"
-          >
-            Todos
-          </button>
-          @for (g of genres(); track g.deckId) {
+      @if (type() === 'MOVIE' && genreGroups().length) {
+        <div class="mx-auto mt-4 max-w-3xl">
+          <div class="flex justify-center">
             <button
               type="button"
-              (click)="setGenre(g.deckId)"
-              [class]="genre() === g.deckId ? activeChip : idleChip"
+              (click)="setGenre(null)"
+              [class]="genre() === null ? activeChip : idleChip"
             >
-              {{ g.name }}
+              Todos
             </button>
+          </div>
+          @for (group of genreGroups(); track group.name) {
+            <div class="mt-3">
+              <p class="text-center text-[11px] uppercase tracking-wide text-muted">
+                {{ group.name }}
+              </p>
+              <div class="mt-1.5 flex flex-wrap justify-center gap-1.5">
+                @for (g of group.chips; track g.deckId) {
+                  <button
+                    type="button"
+                    (click)="setGenre(g.deckId)"
+                    [class]="genre() === g.deckId ? activeChip : idleChip"
+                  >
+                    {{ g.name }}
+                  </button>
+                }
+              </div>
+            </div>
           }
         </div>
       }
@@ -107,7 +118,7 @@ interface SuggestionTexts {
           <p>No hay más sugerencias por ahora.</p>
           <p class="mt-1">
             @if (genre()) {
-              Ya tienes o has descartado lo más popular de este género.
+              Ya tienes o has descartado lo más popular de esta categoría.
             } @else {
               {{ labels().emptyHint }}
             }
@@ -150,6 +161,19 @@ export class Suggestions {
   readonly labels = computed(() => this.texts[this.type()]);
   readonly sections = signal<SuggestionDeck[]>([]);
   readonly genres = signal<SuggestionGenre[]>([]);
+  /** One chip row per axis, in the order the backend sends them. */
+  readonly genreGroups = computed(() => {
+    const groups = new Map<string, SuggestionGenre[]>();
+    for (const chip of this.genres()) {
+      const chips = groups.get(chip.group);
+      if (chips) {
+        chips.push(chip);
+      } else {
+        groups.set(chip.group, [chip]);
+      }
+    }
+    return [...groups].map(([name, chips]) => ({ name, chips }));
+  });
   /** Deck id of the genre being browsed; null means the personalized rows. */
   readonly genre = signal<string | null>(null);
   readonly loading = signal(true);

@@ -2,11 +2,13 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnDestroy, computed, effect, inject, input, output, signal } from '@angular/core';
 import { switchMap } from 'rxjs';
 import { ItemApi } from '../items/item-api';
-import { ItemStatus, ItemType } from '../items/item.model';
+import { ItemStatus, ItemType, ProviderBadge, providerBadges } from '../items/item.model';
 import { MetadataApi } from '../items/metadata-api';
-import { Suggestion, SuggestionApi } from './suggestion-api';
+import { Suggestion, SuggestionApi, trailerUrl } from './suggestion-api';
 
 const VISIBLE_TILES = 8;
+/** Logos that fit across a tile without wrapping into the title. */
+const MAX_PROVIDERS = 4;
 /** Grace period before a dismissal reaches the server. */
 const UNDO_MS = 5000;
 
@@ -55,6 +57,37 @@ interface PendingDismissal {
               >
                 ✕
               </button>
+              @if (s.trailerKey) {
+                <a
+                  [href]="trailerUrl(s)"
+                  target="_blank"
+                  rel="noopener"
+                  title="Ver tráiler"
+                  aria-label="Ver tráiler"
+                  class="absolute left-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-ink/80 text-[10px] leading-none text-muted ring-1 ring-line/60 transition hover:bg-ink hover:text-amber"
+                >
+                  ▶
+                </a>
+              }
+              @if (watchProviders(s); as providers) {
+                <div
+                  class="absolute inset-x-1 bottom-1 flex flex-wrap items-center justify-center gap-1 rounded bg-ink/75 px-1 py-1 ring-1 ring-line/60"
+                >
+                  @for (provider of providers; track provider.name) {
+                    @if (provider.icon) {
+                      <img
+                        [src]="provider.icon"
+                        [alt]="provider.name"
+                        [title]="provider.name"
+                        class="h-5 w-5 rounded"
+                        loading="lazy"
+                      />
+                    } @else {
+                      <span class="truncate text-[10px] text-muted">{{ provider.name }}</span>
+                    }
+                  }
+                </div>
+              }
             </div>
             <h3 class="mt-2 min-h-10 line-clamp-2 text-sm leading-snug">{{ s.title }}</h3>
             <p class="mt-0.5 h-4 text-xs text-muted">
@@ -116,6 +149,7 @@ export class SuggestionRow implements OnDestroy {
   readonly duplicateMessage = input.required<string>();
   readonly refreshing = input(false);
   readonly reload = output<void>();
+  readonly trailerUrl = trailerUrl;
 
   readonly cards = signal<Suggestion[]>([]);
   readonly busy = signal(false);
@@ -141,6 +175,11 @@ export class SuggestionRow implements OnDestroy {
 
   ngOnDestroy(): void {
     this.commitDismissal();
+  }
+
+  /** Same logos the collection shows, capped at what the tile can hold. */
+  watchProviders(suggestion: Suggestion): ProviderBadge[] | null {
+    return providerBadges(suggestion.providers.slice(0, MAX_PROVIDERS));
   }
 
   add(suggestion: Suggestion, status: ItemStatus): void {

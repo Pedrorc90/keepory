@@ -2,12 +2,14 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { switchMap } from 'rxjs';
 import { ItemApi } from '../items/item-api';
-import { ItemStatus, ItemType } from '../items/item.model';
+import { ItemStatus, ItemType, ProviderBadge, providerBadges } from '../items/item.model';
 import { MetadataApi } from '../items/metadata-api';
-import { Suggestion, SuggestionApi, SuggestionDeck } from './suggestion-api';
+import { Suggestion, SuggestionApi, SuggestionDeck, trailerUrl } from './suggestion-api';
 
 /** Drag distance that commits a swipe. */
 const THRESHOLD = 90;
+/** Logos that fit on the card above the title. */
+const MAX_PROVIDERS = 3;
 /** Cards drawn behind the top one. */
 const STACK_DEPTH = 2;
 
@@ -78,6 +80,38 @@ interface DeckCard {
           }
 
           <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink via-ink/85 to-transparent p-4 pt-10">
+            @if (watchProviders(card.suggestion) || card.suggestion.trailerKey) {
+              <div class="mb-2 flex flex-wrap items-center gap-1.5">
+                @for (provider of watchProviders(card.suggestion); track provider.name) {
+                  @if (provider.icon) {
+                    <img
+                      [src]="provider.icon"
+                      [alt]="provider.name"
+                      [title]="provider.name"
+                      draggable="false"
+                      class="h-6 w-6 rounded"
+                      loading="lazy"
+                    />
+                  } @else {
+                    <span class="rounded bg-ink/70 px-1.5 py-0.5 text-[10px] text-muted ring-1 ring-line/60">
+                      {{ provider.name }}
+                    </span>
+                  }
+                }
+                @if (card.suggestion.trailerKey) {
+                  <!-- Stops the pointer here so opening the trailer is not read as a swipe. -->
+                  <a
+                    [href]="trailerUrl(card.suggestion)"
+                    target="_blank"
+                    rel="noopener"
+                    (pointerdown)="$event.stopPropagation()"
+                    class="rounded border border-line px-1.5 py-0.5 text-[10px] text-muted transition hover:border-amber hover:text-amber"
+                  >
+                    ▶ Tráiler
+                  </a>
+                }
+              </div>
+            }
             <h2 class="font-display text-xl font-semibold leading-tight">{{ card.suggestion.title }}</h2>
             <p class="mt-0.5 text-xs text-muted">
               @if (card.suggestion.year) { {{ card.suggestion.year }} }
@@ -171,6 +205,7 @@ export class SuggestionDeckView {
   readonly duplicateMessage = input.required<string>();
   readonly refreshing = input(false);
   readonly reload = output<void>();
+  readonly trailerUrl = trailerUrl;
 
   readonly index = signal(0);
   readonly notice = signal<string | null>(null);
@@ -216,6 +251,11 @@ export class SuggestionDeckView {
       this.notice.set(null);
       this.resetDrag();
     });
+  }
+
+  /** Same logos the collection shows; three is all the card has room for. */
+  watchProviders(suggestion: Suggestion): ProviderBadge[] | null {
+    return providerBadges(suggestion.providers.slice(0, MAX_PROVIDERS));
   }
 
   /** Badge opacity for the direction the current drag is heading. */
