@@ -1,5 +1,15 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnDestroy, computed, effect, inject, input, output, signal } from '@angular/core';
+import {
+  Component,
+  OnDestroy,
+  computed,
+  effect,
+  inject,
+  input,
+  output,
+  signal,
+  untracked,
+} from '@angular/core';
 import { switchMap } from 'rxjs';
 import { ItemApi } from '../items/item-api';
 import { ItemStatus, ItemType, ProviderBadge, providerBadges } from '../items/item.model';
@@ -170,12 +180,16 @@ export class SuggestionRow implements OnDestroy {
     // A reload hands in a fresh suggestions array; restart the row.
     effect(() => {
       const suggestions = this.suggestions();
-      // The row is about to be rebuilt, so there is nothing left to undo into.
-      this.commitDismissal();
-      this.cards.set(suggestions);
-      this.busy.set(false);
-      this.notice.set(null);
-      this.leavingId.set(null);
+      // Only the input drives the reset: commitDismissal reads pending(), which
+      // would otherwise make a dismissal rebuild the row and undo itself.
+      untracked(() => {
+        // The row is about to be rebuilt, so there is nothing left to undo into.
+        this.commitDismissal();
+        this.cards.set(suggestions);
+        this.busy.set(false);
+        this.notice.set(null);
+        this.leavingId.set(null);
+      });
     });
   }
 
