@@ -268,9 +268,16 @@
   </div>
   @if (user()) {
   <footer class="border-t border-line">
-    <div class="mx-auto w-full sm:max-w-[92%] px-4 py-3 text-xs text-muted">
-      This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability data provided by
-      JustWatch. Book covers courtesy of Open Library.
+    <div
+      class="mx-auto flex w-full flex-col items-start gap-2 px-4 py-3 text-xs text-muted sm:max-w-[92%] sm:flex-row sm:items-center sm:gap-3">
+      <a href="https://www.themoviedb.org" target="_blank" rel="noopener" class="shrink-0">
+        <img src="/tmdb.svg" alt="The Movie Database" width="80" height="10" class="h-[10px] w-auto" />
+      </a>
+      <p>
+        This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability data provided by
+        JustWatch. Book covers courtesy of Open Library.
+      </p>
+      <a routerLink="/privacidad" class="shrink-0 hover:text-paper hover:underline">Privacidad</a>
     </div>
   </footer>
   }

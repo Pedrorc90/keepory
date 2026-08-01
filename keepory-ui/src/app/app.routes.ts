@@ -10,5 +10,7 @@ export const routes: Routes = [
   { path: 'items/new', canActivate: [authGuard], loadComponent: () => import('./items/item-form').then((m) => m.ItemForm) },
   { path: 'items/:id/edit', canActivate: [authGuard], loadComponent: () => import('./items/item-form').then((m) => m.ItemForm) },
   { path: 'suggestions', canActivate: [authGuard], loadComponent: () => import('./suggestions/suggestions').then((m) => m.Suggestions) },
+  // Public on purpose: it has to be readable from the login screen, before there is a session.
+  { path: 'privacidad', loadComponent: () => import('./legal/privacy').then((m) => m.Privacy) },
   { path: '**', redirectTo: 'items' },
 ];

@@ -1,10 +1,11 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthApi } from './auth-api';
 
 @Component({
   selector: 'app-login',
+  imports: [RouterLink],
   template: `
     <div class="flex min-h-[70dvh] items-center justify-center px-6">
       <div class="w-full max-w-sm">
@@ -36,6 +37,11 @@ import { AuthApi } from './auth-api';
             {{ busy() ? 'Entrando…' : 'Entrar' }}
           </button>
         </form>
+
+        <p class="text-muted mt-6 text-center text-xs">
+          Guardamos tu email y tu biblioteca, nada más.
+          <a routerLink="/privacidad" class="hover:text-paper underline">Cómo tratamos tus datos</a>
+        </p>
       </div>
     </div>
   `,
