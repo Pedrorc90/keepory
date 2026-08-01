@@ -35,6 +35,11 @@ public class SuggestionController {
         return service.movieGenres();
     }
 
+    @GetMapping("/movies/similar/{externalId}")
+    public List<Suggestion> similarMovies(@PathVariable String externalId) {
+        return service.similarMovies(externalId);
+    }
+
     @GetMapping("/movies/{deckId}")
     public SuggestionDeck movieDeck(@PathVariable String deckId,
                                     @RequestParam(defaultValue = "false") boolean refresh) {

@@ -479,8 +479,8 @@ export class ItemList {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
 
-  /** "Sueltos" hides what already lives in a collection; "Todo" shows the whole shelf. */
-  readonly excludeCollected = computed(() => !this.collectionId() && this.view() !== 'all');
+  /** Outside a collection an item shows once: inside its folder, never loose beside it. */
+  readonly excludeCollected = computed(() => !this.collectionId());
   readonly shelfCollections = computed(() => {
     if (this.collectionId() || this.view() === 'items') return [];
     // Cards ride along with the first page only; paging counts items, not collections.
@@ -500,7 +500,7 @@ export class ItemList {
       return `${folders} ${folders === 1 ? 'colección' : 'colecciones'}`;
     }
     if (!this.result()) return '';
-    const items = `${total} ${this.view() === 'items' && !this.collectionId() ? 'sueltos' : 'en la estantería'}`;
+    const items = `${total} ${this.collectionId() ? 'en la estantería' : 'sueltos'}`;
     return folders ? `${items} · ${folders} ${folders === 1 ? 'colección' : 'colecciones'}` : items;
   });
   readonly dropTarget = signal<string | null>(null);

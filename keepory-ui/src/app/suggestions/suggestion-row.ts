@@ -114,26 +114,30 @@ interface PendingDismissal {
             </div>
           </li>
         }
-        <li class="w-32 shrink-0 sm:w-36">
-          <button
-            type="button"
-            (click)="reload.emit()"
-            [disabled]="refreshing() || busy()"
-            title="Más sugerencias"
-            aria-label="Más sugerencias"
-            class="flex aspect-2/3 w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-line bg-panel/40 text-muted transition enabled:hover:border-amber/60 enabled:hover:text-amber disabled:opacity-50"
-          >
-            <span class="block text-3xl leading-none" [class.animate-spin]="refreshing()">↻</span>
-            <span class="px-2 text-center text-xs leading-snug">Más sugerencias</span>
-          </button>
-        </li>
+        @if (reloadable()) {
+          <li class="w-32 shrink-0 sm:w-36">
+            <button
+              type="button"
+              (click)="reload.emit()"
+              [disabled]="refreshing() || busy()"
+              title="Más sugerencias"
+              aria-label="Más sugerencias"
+              class="flex aspect-2/3 w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-line bg-panel/40 text-muted transition enabled:hover:border-amber/60 enabled:hover:text-amber disabled:opacity-50"
+            >
+              <span class="block text-3xl leading-none" [class.animate-spin]="refreshing()">↻</span>
+              <span class="px-2 text-center text-xs leading-snug">Más sugerencias</span>
+            </button>
+          </li>
+        }
       </ul>
     } @else {
       <p class="py-4 text-sm text-muted">
         No quedan sugerencias en esta sección.
-        <button type="button" (click)="reload.emit()" class="ml-1 text-amber underline">
-          Buscar de nuevo
-        </button>
+        @if (reloadable()) {
+          <button type="button" (click)="reload.emit()" class="ml-1 text-amber underline">
+            Buscar de nuevo
+          </button>
+        }
       </p>
     }
   `,
@@ -148,6 +152,8 @@ export class SuggestionRow implements OnDestroy {
   readonly completedLabel = input.required<string>();
   readonly duplicateMessage = input.required<string>();
   readonly refreshing = input(false);
+  /** The row offers a "more suggestions" tile unless the caller opts out. */
+  readonly reloadable = input(true);
   readonly reload = output<void>();
   readonly trailerUrl = trailerUrl;
 

@@ -89,13 +89,29 @@ public class SuggestionService {
         addDeck(decks, excluded, "pending", PENDING_TITLE,
                 statusDeck(movies, ItemStatus.PENDING, excluded));
         // No genre rows here: genres are browsable from the chips instead.
-        return decks.stream().map(this::enriched).toList();
+        return enriched(decks);
     }
 
     // Providers and trailers cost one TMDB call per title, so they are fetched
     // for the final deck instead of every candidate fill() walked past.
     private SuggestionDeck enriched(SuggestionDeck deck) {
         return new SuggestionDeck(deck.id(), deck.title(), tmdb.enrich(deck.suggestions()));
+    }
+
+    // Every deck in a single burst rather than one per deck: enrich() fans out
+    // over virtual threads, so 45 detail calls take the wall-clock of 15.
+    private List<SuggestionDeck> enriched(List<SuggestionDeck> decks) {
+        List<Suggestion> all = tmdb.enrich(decks.stream()
+                .flatMap(deck -> deck.suggestions().stream())
+                .toList());
+        List<SuggestionDeck> result = new ArrayList<>(decks.size());
+        int from = 0;
+        for (SuggestionDeck deck : decks) {
+            int to = from + deck.suggestions().size();
+            result.add(new SuggestionDeck(deck.id(), deck.title(), List.copyOf(all.subList(from, to))));
+            from = to;
+        }
+        return result;
     }
 
     /** Every chip the user can browse, in the order the UI stacks the rows. */
@@ -196,6 +212,17 @@ public class SuggestionService {
             collect(tmdb.recommendations(seed.getExternalId()), byId, hits, excluded);
         }
         return top(byId, s -> hits.get(s.externalId()), DECK_SIZE);
+    }
+
+    // What TMDB recommends for one title, for the row under its edit form. The
+    // seed itself is already on the shelf, so baseExclusions keeps it out.
+    public List<Suggestion> similarMovies(String externalId) {
+        List<Item> movies = items.findByTypeAndSourceAndUserIdAndDeletedAtIsNull(
+                ItemType.MOVIE, TmdbClient.SOURCE, currentUser.id());
+        Map<String, Suggestion> byId = new LinkedHashMap<>();
+        Map<String, Integer> hits = new HashMap<>();
+        collect(tmdb.recommendations(externalId), byId, hits, baseExclusions(movies));
+        return tmdb.enrich(top(byId, s -> hits.get(s.externalId()), DECK_SIZE));
     }
 
     @FunctionalInterface

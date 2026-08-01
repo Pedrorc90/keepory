@@ -53,6 +53,11 @@ export class SuggestionApi {
     });
   }
 
+  /** What TMDB recommends for one movie, shown while editing it. */
+  similarMovies(externalId: string): Observable<Suggestion[]> {
+    return this.http.get<Suggestion[]>(`${this.baseUrl}/movies/similar/${externalId}`);
+  }
+
   books(): Observable<Suggestion[]> {
     return this.http.get<Suggestion[]>(`${this.baseUrl}/books`);
   }

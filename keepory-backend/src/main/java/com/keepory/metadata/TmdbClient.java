@@ -24,6 +24,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
@@ -45,12 +46,16 @@ public class TmdbClient {
     private static final long EXTRAS_TTL_MS = Duration.ofHours(12).toMillis();
     private static final int EXTRAS_CACHE_MAX = 2000;
     private static final MovieExtras NO_EXTRAS = new MovieExtras(List.of(), null);
+    // Detail calls in flight at once. All 45 of a cold desktop load would sit on
+    // TMDB's rate limit; 30 keeps the pipeline full without courting a 429.
+    private static final int MAX_IN_FLIGHT = 30;
 
     private final RestClient client;
     private final String apiKey;
     // TMDB's genre catalog is static; fetched once per app run.
     private volatile Map<String, Integer> genreIdsByName;
     private final Map<String, CacheEntry> extrasCache = new ConcurrentHashMap<>();
+    private final Semaphore inFlight = new Semaphore(MAX_IN_FLIGHT);
 
     public TmdbClient(RestClient.Builder builder, @Value("${keepory.tmdb.api-key}") String apiKey) {
         this.client = builder.baseUrl("https://api.themoviedb.org/3").build();
@@ -154,7 +159,7 @@ public class TmdbClient {
         }
         try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
             List<Future<MovieExtras>> pending = suggestions.stream()
-                    .map(s -> executor.submit(() -> extras(s.externalId())))
+                    .map(s -> executor.submit(() -> throttled(s.externalId())))
                     .toList();
             List<Suggestion> enriched = new ArrayList<>(suggestions.size());
             for (int i = 0; i < suggestions.size(); i++) {
@@ -162,6 +167,16 @@ public class TmdbClient {
                 enriched.add(suggestions.get(i).withExtras(extras.providers(), extras.trailerKey()));
             }
             return enriched;
+        }
+    }
+
+    // A cache hit still takes a permit, but it releases it without a round trip.
+    private MovieExtras throttled(String externalId) throws InterruptedException {
+        inFlight.acquire();
+        try {
+            return extras(externalId);
+        } finally {
+            inFlight.release();
         }
     }
 

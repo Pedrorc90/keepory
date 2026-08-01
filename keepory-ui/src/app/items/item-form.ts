@@ -4,6 +4,8 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { CollectionApi } from '../collections/collection-api';
+import { Suggestion, SuggestionApi } from '../suggestions/suggestion-api';
+import { SuggestionRow } from '../suggestions/suggestion-row';
 import { ItemApi } from './item-api';
 import {
   ATTRIBUTE_FIELDS,
@@ -26,9 +28,9 @@ import { MetadataSearchResult } from './metadata.model';
 
 @Component({
   selector: 'app-item-form',
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, SuggestionRow],
   template: `
-    <div class="mx-auto max-w-3xl">
+    <div class="mx-auto max-w-6xl">
       <h1 class="font-display text-3xl font-semibold">
         {{ id ? 'Editar elemento' : 'Añadir a la colección' }}
       </h1>
@@ -40,7 +42,7 @@ import { MetadataSearchResult } from './metadata.model';
         </p>
       } @else {
         <form [formGroup]="form" (ngSubmit)="save()" class="mt-6 grid gap-6">
-          <div class="grid content-start gap-4">
+          <div class="grid max-w-3xl content-start gap-4">
             <div class="grid gap-1.5 text-sm">
               <span class="text-muted">Tipo</span>
               <div class="grid grid-cols-2 gap-3">
@@ -140,7 +142,7 @@ import { MetadataSearchResult } from './metadata.model';
           </div>
 
           @if (detailsVisible()) {
-            <div class="grid gap-6 border-t border-line pt-6 md:grid-cols-[1fr_280px]">
+            <div class="grid gap-6 border-t border-line pt-6 lg:grid-cols-[minmax(0,1fr)_320px_220px]">
               <div class="grid content-start gap-4">
                 <label class="grid gap-1.5 text-sm">
                   <span class="text-muted">Título</span>
@@ -234,49 +236,6 @@ import { MetadataSearchResult } from './metadata.model';
                   </div>
                 }
 
-                <div class="grid gap-1.5 text-sm">
-                  <span class="text-muted">Colecciones</span>
-                  @if (collectionOptions().length) {
-                    <div class="flex flex-wrap gap-2">
-                      @for (collection of collectionOptions(); track collection.id) {
-                        <label class="cursor-pointer">
-                          <input
-                            type="checkbox"
-                            class="peer sr-only"
-                            [checked]="selectedCollections().includes(collection.id)"
-                            (change)="toggleCollection(collection.id)"
-                          />
-                          <span
-                            class="flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm text-muted transition hover:border-amber/60 hover:text-paper peer-checked:border-amber peer-checked:bg-amber/15 peer-checked:text-paper peer-focus-visible:ring-2 peer-focus-visible:ring-amber/70"
-                          >
-                            {{ collection.name }}
-                          </span>
-                        </label>
-                      }
-                    </div>
-                  }
-                  <div class="flex gap-2">
-                    <input
-                      #collectionName
-                      (keydown.enter)="$event.preventDefault(); createCollection(collectionName)"
-                      placeholder="Nueva colección…"
-                      maxlength="120"
-                      class="min-w-0 flex-1 rounded-md border border-line bg-panel px-3 py-2 placeholder:text-muted focus:border-amber focus:outline-none"
-                      aria-label="Nombre de la nueva colección"
-                    />
-                    <button
-                      type="button"
-                      (click)="createCollection(collectionName)"
-                      class="rounded-md border border-line px-4 py-2 text-sm transition hover:border-amber"
-                    >
-                      Crear
-                    </button>
-                  </div>
-                  @if (collectionError()) {
-                    <span class="text-xs text-rust">{{ collectionError() }}</span>
-                  }
-                </div>
-
                 <label class="grid gap-1.5 text-sm">
                   <span class="text-muted">Notas</span>
                   <textarea
@@ -303,8 +262,51 @@ import { MetadataSearchResult } from './metadata.model';
                 </div>
               </div>
 
-              <div class="order-first md:order-none">
-                <div class="aspect-2/3 w-56 overflow-hidden rounded-md bg-panel ring-1 ring-line md:w-full">
+              <div class="grid content-start gap-1.5 text-sm">
+                <span class="text-muted">Colecciones</span>
+                @if (collectionOptions().length) {
+                  <div class="flex flex-wrap gap-2">
+                    @for (collection of collectionOptions(); track collection.id) {
+                      <label class="cursor-pointer">
+                        <input
+                          type="checkbox"
+                          class="peer sr-only"
+                          [checked]="selectedCollections().includes(collection.id)"
+                          (change)="toggleCollection(collection.id)"
+                        />
+                        <span
+                          class="flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm text-muted transition hover:border-amber/60 hover:text-paper peer-checked:border-amber peer-checked:bg-amber/15 peer-checked:text-paper peer-focus-visible:ring-2 peer-focus-visible:ring-amber/70"
+                        >
+                          {{ collection.name }}
+                        </span>
+                      </label>
+                    }
+                  </div>
+                }
+                <div class="flex gap-2">
+                  <input
+                    #collectionName
+                    (keydown.enter)="$event.preventDefault(); createCollection(collectionName)"
+                    placeholder="Nueva colección…"
+                    maxlength="120"
+                    class="min-w-0 flex-1 rounded-md border border-line bg-panel px-3 py-2 placeholder:text-muted focus:border-amber focus:outline-none"
+                    aria-label="Nombre de la nueva colección"
+                  />
+                  <button
+                    type="button"
+                    (click)="createCollection(collectionName)"
+                    class="rounded-md border border-line px-4 py-2 text-sm transition hover:border-amber"
+                  >
+                    Crear
+                  </button>
+                </div>
+                @if (collectionError()) {
+                  <span class="text-xs text-rust">{{ collectionError() }}</span>
+                }
+              </div>
+
+              <div class="order-first lg:order-none">
+                <div class="aspect-2/3 w-56 overflow-hidden rounded-md bg-panel ring-1 ring-line lg:w-full">
                   @if (coverPreview(); as url) {
                     <img [src]="url" alt="Vista previa de la carátula" class="h-full w-full object-cover" />
                   } @else {
@@ -325,6 +327,24 @@ import { MetadataSearchResult } from './metadata.model';
             </button>
           }
         </form>
+
+        @if (similarError()) {
+          <p class="mt-10 rounded-md border border-rust/50 bg-rust/10 px-4 py-3 text-sm">
+            {{ similarError() }}
+          </p>
+        } @else if (similar(); as suggestions) {
+          <section class="mt-10 border-t border-line pt-6">
+            <h2 class="font-display text-xl font-semibold">Más películas como esta</h2>
+            <app-suggestion-row
+              class="mt-3 block"
+              [suggestions]="suggestions"
+              [type]="'MOVIE'"
+              completedLabel="Vista"
+              duplicateMessage="Esta película ya está en tu colección."
+              [reloadable]="false"
+            />
+          </section>
+        }
       }
     </div>
   `,
@@ -332,6 +352,7 @@ import { MetadataSearchResult } from './metadata.model';
 export class ItemForm {
   private readonly api = inject(ItemApi);
   private readonly collections = inject(CollectionApi);
+  private readonly suggestions = inject(SuggestionApi);
   private readonly metadata = inject(MetadataApi);
   private readonly router = inject(Router);
   private readonly fb = inject(NonNullableFormBuilder);
@@ -378,6 +399,9 @@ export class ItemForm {
   readonly saveError = signal<string | null>(null);
   readonly loadError = signal<string | null>(null);
 
+  readonly similar = signal<Suggestion[] | null>(null);
+  readonly similarError = signal<string | null>(null);
+
   private attributes: Record<string, unknown> = {};
   private source: string | null = null;
   private externalId: string | null = null;
@@ -419,12 +443,25 @@ export class ItemForm {
         this.currentType.set(item.type);
         this.rebuildAttrs();
         this.providerLogos.set(providerBadges(this.attributes['watchProviders']));
+        // Only TMDB movies have recommendations to show.
+        if (item.type === 'MOVIE' && item.source === 'TMDB' && item.externalId) {
+          this.loadSimilar();
+        }
       },
       error: () => this.loadError.set('No se pudo cargar el elemento.'),
     });
     this.collections.ofItem(id).subscribe({
       next: (ids) => this.selectedCollections.set(ids),
       error: () => this.collectionError.set('No se pudieron cargar las colecciones.'),
+    });
+  }
+
+  private loadSimilar(): void {
+    if (!this.externalId) return;
+    this.similarError.set(null);
+    this.suggestions.similarMovies(this.externalId).subscribe({
+      next: (results) => this.similar.set(results),
+      error: () => this.similarError.set('No se pudieron cargar las sugerencias similares.'),
     });
   }
 
