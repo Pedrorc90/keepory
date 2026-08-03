@@ -32,8 +32,8 @@ export class AuthApi {
     return this.state();
   }
 
-  login(email: string, password: string): Observable<User> {
-    return this.http.post<User>(`${this.baseUrl}/login`, { email, password }).pipe(
+  login(email: string, password: string, rememberMe: boolean): Observable<User> {
+    return this.http.post<User>(`${this.baseUrl}/login`, { email, password, rememberMe }).pipe(
       tap((user) => {
         this.state.set(user);
         this.resolved = true;
