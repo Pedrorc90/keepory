@@ -84,6 +84,17 @@
     </button>
   </ng-template>
 
+  <ng-template #showMoreTpl let-type let-total="total">
+    @if (total > visibleCount(type)) {
+      <button
+        (click)="showMore(type)"
+        class="ml-3.5 flex shrink-0 items-center gap-2 rounded-lg border-l border-l-line py-1.5 pl-3 pr-3 text-left text-xs text-muted/70 transition hover:text-amber"
+      >
+        Ver más…
+      </button>
+    }
+  </ng-template>
+
   <ng-template #collectionRow let-collection let-link="link" let-active="active">
     @if (renamingId() === collection.id) {
       <div class="shrink-0 py-1 ml-3.5 border-l border-l-line pl-3">
@@ -209,7 +220,7 @@
             />
           </div>
           @if (sectionOpen('MOVIE')) {
-            @for (collection of movieCollections(); track collection.id) {
+            @for (collection of visibleCollections(movieCollections(), 'MOVIE'); track collection.id) {
               <ng-container
                 [ngTemplateOutlet]="collectionRow"
                 [ngTemplateOutletContext]="{
@@ -219,6 +230,10 @@
                 }"
               />
             }
+            <ng-container
+              [ngTemplateOutlet]="showMoreTpl"
+              [ngTemplateOutletContext]="{ $implicit: 'MOVIE', total: movieCollections().length }"
+            />
             <ng-container [ngTemplateOutlet]="newCollection" [ngTemplateOutletContext]="{ $implicit: 'MOVIE' }" />
           }
           <div class="flex shrink-0 items-center gap-1">
@@ -239,7 +254,7 @@
             />
           </div>
           @if (sectionOpen('BOOK')) {
-            @for (collection of bookCollections(); track collection.id) {
+            @for (collection of visibleCollections(bookCollections(), 'BOOK'); track collection.id) {
               <ng-container
                 [ngTemplateOutlet]="collectionRow"
                 [ngTemplateOutletContext]="{
@@ -249,6 +264,10 @@
                 }"
               />
             }
+            <ng-container
+              [ngTemplateOutlet]="showMoreTpl"
+              [ngTemplateOutletContext]="{ $implicit: 'BOOK', total: bookCollections().length }"
+            />
             <ng-container [ngTemplateOutlet]="newCollection" [ngTemplateOutletContext]="{ $implicit: 'BOOK' }" />
           }
         </nav>

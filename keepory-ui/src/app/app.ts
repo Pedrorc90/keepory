@@ -36,6 +36,10 @@ export class App {
   readonly movieCollections = computed(() => this.collections.forType('MOVIE'));
   readonly bookCollections = computed(() => this.collections.forType('BOOK'));
 
+  // Long shelves are revealed 5 at a time instead of all at once.
+  private readonly PAGE_SIZE = 5;
+  private readonly visibleCounts = signal<Partial<Record<ItemType, number>>>({});
+
   // The sidebar is a slide-over below md:, part of the layout from md: up.
   readonly drawerOpen = signal(false);
 
@@ -102,6 +106,18 @@ export class App {
   /** A collapsed section still opens mid-drag, or its collections could not be dropped on. */
   sectionOpen(type: ItemType): boolean {
     return !!this.draggedItem() || !this.isCollapsed(type);
+  }
+
+  visibleCount(type: ItemType): number {
+    return this.visibleCounts()[type] ?? this.PAGE_SIZE;
+  }
+
+  visibleCollections(all: Collection[], type: ItemType): Collection[] {
+    return all.slice(0, this.visibleCount(type));
+  }
+
+  showMore(type: ItemType): void {
+    this.visibleCounts.update((counts) => ({ ...counts, [type]: this.visibleCount(type) + this.PAGE_SIZE }));
   }
 
   toggleSection(type: ItemType): void {
