@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -382,9 +383,35 @@ public class SuggestionService {
         return queries;
     }
 
+    // Google Books indexes Spanish editions under Spanish subject terms, so the
+    // English BISAC label barely matches once langRestrict=es is on: measured over
+    // 20 results, subject:"Fantasy" leaves 1 Spanish title and subject:"Fantasia"
+    // leaves 14. Only terms measured to beat their English label are mapped —
+    // "Thrillers" (5 vs 2) and "Classics" (10 vs 1) still do better in English, and
+    // "Fantasia" goes unaccented because "Fantasía" is barely indexed (1 result).
+    private static final Map<String, String> SPANISH_SUBJECTS = Map.ofEntries(
+            Map.entry("fantasy", "Fantasia"),
+            Map.entry("mystery & detective", "Novela negra"),
+            Map.entry("action & adventure", "Aventuras"),
+            Map.entry("science fiction", "Ciencia ficción"),
+            Map.entry("historical", "Novela histórica"),
+            Map.entry("social themes", "Novela juvenil"),
+            Map.entry("school & education", "Novela juvenil"),
+            Map.entry("family", "Familia"),
+            Map.entry("romance", "Novela romántica"),
+            Map.entry("horror", "Terror"),
+            Map.entry("biography & autobiography", "Biografía"),
+            Map.entry("literary", "Narrativa"),
+            Map.entry("poetry", "Poesía"));
+
     // BISAC-style categories ("Fiction / Fantasy / General") are too specific for
     // subject search; the middle segment is the useful genre term.
     private static String subject(String category) {
+        String term = bisacTerm(category);
+        return SPANISH_SUBJECTS.getOrDefault(term.toLowerCase(Locale.ROOT), term);
+    }
+
+    private static String bisacTerm(String category) {
         String[] parts = category.split("/");
         for (int i = 1; i < parts.length; i++) {
             String part = parts[i].trim();
