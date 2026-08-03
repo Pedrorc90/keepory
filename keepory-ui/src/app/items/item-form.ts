@@ -30,7 +30,7 @@ import { MetadataSearchResult } from './metadata.model';
   selector: 'app-item-form',
   imports: [ReactiveFormsModule, RouterLink, SuggestionRow],
   template: `
-    <div class="mx-auto max-w-6xl">
+    <div class="mx-auto max-w-7xl">
       <h1 class="font-display text-3xl font-semibold">
         {{ id ? 'Editar elemento' : 'Añadir a la colección' }}
       </h1>
@@ -201,40 +201,42 @@ import { MetadataSearchResult } from './metadata.model';
                   }
                 </div>
 
-                @if (genres(); as chips) {
-                  <div class="grid gap-1.5 text-sm">
-                    <span class="text-muted">Géneros</span>
-                    <div class="flex flex-wrap gap-2">
-                      @for (g of chips; track g.name) {
-                        <span class="flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm text-muted">
-                          <span class="h-2 w-2 rounded-full" [class]="g.dotClass"></span>
-                          {{ g.name }}
-                        </span>
-                      }
-                    </div>
-                  </div>
-                }
-
-                @if (providerLogos(); as providers) {
-                  <div class="grid gap-1.5 text-sm">
-                    <span class="text-muted">Dónde ver</span>
-                    <div class="flex flex-wrap items-center gap-2">
-                      @for (provider of providers; track provider.name) {
-                        @if (provider.icon) {
-                          <img
-                            [src]="provider.icon"
-                            [alt]="provider.name"
-                            [title]="provider.name"
-                            class="h-8 w-8 rounded"
-                            loading="lazy"
-                          />
-                        } @else {
-                          <span class="text-xs text-muted">{{ provider.name }}</span>
+                <div class="grid gap-4 sm:grid-cols-2">
+                  @if (genres(); as chips) {
+                    <div class="grid gap-1.5 text-sm">
+                      <span class="text-muted">Géneros</span>
+                      <div class="flex flex-wrap gap-2">
+                        @for (g of chips; track g.name) {
+                          <span class="flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm text-muted">
+                            <span class="h-2 w-2 rounded-full" [class]="g.dotClass"></span>
+                            {{ g.name }}
+                          </span>
                         }
-                      }
+                      </div>
                     </div>
-                  </div>
-                }
+                  }
+
+                  @if (providerLogos(); as providers) {
+                    <div class="grid gap-1.5 text-sm">
+                      <span class="text-muted">Dónde ver</span>
+                      <div class="flex flex-wrap items-center gap-2">
+                        @for (provider of providers; track provider.name) {
+                          @if (provider.icon) {
+                            <img
+                              [src]="provider.icon"
+                              [alt]="provider.name"
+                              [title]="provider.name"
+                              class="h-8 w-8 rounded"
+                              loading="lazy"
+                            />
+                          } @else {
+                            <span class="text-xs text-muted">{{ provider.name }}</span>
+                          }
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
 
                 <label class="grid gap-1.5 text-sm">
                   <span class="text-muted">Notas</span>
@@ -428,18 +430,16 @@ export class ItemForm {
         this.externalId = item.externalId;
         // Silent patch: the type handler would prune the collections loaded below
         // against a list that may still be empty on a direct reload.
-        this.form.patchValue(
-          {
-            type: item.type,
-            title: item.title,
-            coverUrl: item.coverUrl ?? '',
-            status: item.status,
-            rating: item.rating?.toString() ?? '',
-            completedAt: item.completedAt ?? '',
-            notes: item.notes ?? '',
-          },
-          { emitEvent: false },
-        );
+        this.form.controls.type.setValue(item.type, { emitEvent: false });
+        // coverPreview tracks coverUrl.valueChanges, so this one must emit normally.
+        this.form.patchValue({
+          title: item.title,
+          coverUrl: item.coverUrl ?? '',
+          status: item.status,
+          rating: item.rating?.toString() ?? '',
+          completedAt: item.completedAt ?? '',
+          notes: item.notes ?? '',
+        });
         this.currentType.set(item.type);
         this.rebuildAttrs();
         this.providerLogos.set(providerBadges(this.attributes['watchProviders']));
