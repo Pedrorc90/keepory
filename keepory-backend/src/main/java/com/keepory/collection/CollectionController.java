@@ -1,5 +1,6 @@
 package com.keepory.collection;
 
+import com.keepory.collection.dto.CollectionRenameRequest;
 import com.keepory.collection.dto.CollectionRequest;
 import com.keepory.collection.dto.CollectionResponse;
 import com.keepory.item.ItemType;
@@ -40,9 +41,9 @@ public class CollectionController {
         return service.create(request);
     }
 
-    // Renames only: the type sent in the body is ignored.
+    // Renames only: the type is immutable once the collection exists.
     @PutMapping("/collections/{id}")
-    public CollectionResponse rename(@PathVariable UUID id, @Valid @RequestBody CollectionRequest request) {
+    public CollectionResponse rename(@PathVariable UUID id, @Valid @RequestBody CollectionRenameRequest request) {
         return service.rename(id, request.name());
     }
 

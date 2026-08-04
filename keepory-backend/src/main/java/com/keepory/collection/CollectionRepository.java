@@ -15,17 +15,7 @@ public interface CollectionRepository extends JpaRepository<Collection, UUID> {
 
     List<Collection> findByUserIdOrderByNameAsc(UUID userId);
 
-    /**
-     * Written out instead of derived from the method name: Spring Data reads
-     * "A and B or C" as "(A and B) or C", which here would leak other people's
-     * collections whenever the type matched.
-     */
-    @Query("""
-            select c from Collection c
-            where c.userId = :userId and (c.type is null or c.type = :type)
-            order by c.name asc
-            """)
-    List<Collection> findVisibleForType(@Param("userId") UUID userId, @Param("type") ItemType type);
+    List<Collection> findByUserIdAndTypeOrderByNameAsc(UUID userId, ItemType type);
 
     // Scoped to the type: the same name is free in each section of the sidebar.
     boolean existsByNameIgnoreCaseAndTypeAndUserId(String name, ItemType type, UUID userId);

@@ -7,8 +7,8 @@ import { ItemType } from '../items/item.model';
 export interface Collection {
   id: string;
   name: string;
-  /** Null means the collection accepts any item type. */
-  type: ItemType | null;
+  /** Every collection lives under one type: it is how the sidebar groups them. */
+  type: ItemType;
   itemCount: number;
   /** Up to four covers, newest first: the mosaic on the collection card. */
   covers: string[];
@@ -41,14 +41,14 @@ export class CollectionApi {
   }
 
   forType(type: ItemType | '' | null): Collection[] {
-    return this.state().filter((c) => !type || c.type === null || c.type === type);
+    return this.state().filter((c) => !type || c.type === type);
   }
 
   byId(id: string): Collection | undefined {
     return this.state().find((c) => c.id === id);
   }
 
-  create(name: string, type: ItemType | null): Observable<Collection> {
+  create(name: string, type: ItemType): Observable<Collection> {
     return this.http.post<Collection>(this.baseUrl, { name, type }).pipe(tap(() => this.refresh()));
   }
 

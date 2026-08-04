@@ -213,10 +213,10 @@ export class App {
     return type === 'BOOK' ? '/books' : '/items';
   }
 
-  /** A typed collection only takes its own item type; an untyped one takes anything. */
+  /** A collection only takes items of its own type. */
   acceptsDrag(collection: Collection): boolean {
     const item = this.draggedItem();
-    return !!item && (collection.type === null || collection.type === item.type);
+    return !!item && collection.type === item.type;
   }
 
   onDragOver(event: DragEvent, collection: Collection): void {

@@ -34,10 +34,9 @@ public class CollectionService {
     @Transactional(readOnly = true)
     public List<CollectionResponse> list(ItemType type) {
         UUID userId = currentUser.id();
-        // A typed filter also returns the untyped ones: those accept any item.
         List<Collection> collections = type == null
                 ? repository.findByUserIdOrderByNameAsc(userId)
-                : repository.findVisibleForType(userId, type);
+                : repository.findByUserIdAndTypeOrderByNameAsc(userId, type);
         Map<UUID, Long> counts = repository.countItems(userId.toString()).stream()
                 .collect(Collectors.toMap(
                         CollectionRepository.CollectionCount::getCollectionId,
@@ -96,7 +95,7 @@ public class CollectionService {
         // Scoped too: you cannot drop someone else's item into your own collection.
         Item item = itemRepository.findByIdAndUserIdAndDeletedAtIsNull(itemId, currentUser.id())
                 .orElseThrow(() -> new EntityNotFoundException("Item %s not found".formatted(itemId)));
-        if (collection.getType() != null && collection.getType() != item.getType()) {
+        if (collection.getType() != item.getType()) {
             throw new IllegalArgumentException(
                     "Collection %s only accepts %s items".formatted(collection.getName(), collection.getType()));
         }

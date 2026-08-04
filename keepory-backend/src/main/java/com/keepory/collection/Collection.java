@@ -34,9 +34,9 @@ public class Collection {
     @Column(nullable = false, length = 120)
     private String name;
 
-    // Null means the collection accepts any item type.
+    // Every collection lives under one type: it is how the sidebar groups them.
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(length = 20, nullable = false)
     private ItemType type;
 
     @ManyToMany
