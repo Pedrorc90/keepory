@@ -124,7 +124,7 @@ type ShelfView = 'collections' | 'items' | 'all';
     </div>
 
     <a
-      routerLink="/suggestions"
+      [routerLink]="suggestionsLink()"
       class="group mx-auto mt-3 flex w-fit items-center gap-2 rounded-full border border-line bg-panel/60 py-1.5 pl-3 pr-3.5 text-sm text-muted transition hover:border-amber/60 hover:bg-amber/10 hover:text-paper"
     >
       <svg
@@ -447,6 +447,10 @@ export class ItemList {
         return '';
     }
   });
+  /** Discover opens on the shelf you are browsing. */
+  readonly suggestionsLink = computed(() =>
+    this.type() === 'BOOK' ? '/suggestions/books' : '/suggestions/movies',
+  );
   readonly sort = signal<ItemSort>('recent');
   readonly status = signal<ItemStatus | ''>('');
   readonly q = signal('');

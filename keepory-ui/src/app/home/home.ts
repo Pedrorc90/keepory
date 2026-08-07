@@ -73,7 +73,7 @@ import { CollectionApi } from '../collections/collection-api';
       </div>
 
       <a
-        routerLink="/suggestions"
+        routerLink="/suggestions/movies"
         class="mt-8 self-start text-sm text-muted underline-offset-4 transition hover:text-amber hover:underline"
       >
         O deja que te sugiera algo →

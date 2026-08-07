@@ -1,4 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Observable, map } from 'rxjs';
 import { ItemType } from '../items/item.model';
 import { Suggestion, SuggestionApi, SuggestionDeck, SuggestionGenre } from './suggestion-api';
@@ -133,9 +135,12 @@ interface SuggestionTexts {
 })
 export class Suggestions {
   private readonly suggestionApi = inject(SuggestionApi);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   readonly types: ItemType[] = ['MOVIE', 'BOOK'];
   readonly typeTabs: Record<ItemType, string> = { MOVIE: 'Películas', BOOK: 'Libros' };
+  private readonly typePaths: Record<ItemType, string> = { MOVIE: 'movies', BOOK: 'books' };
   private readonly texts: Record<ItemType, SuggestionTexts> = {
     MOVIE: {
       tagline: 'Novedades y filas según lo que has visto y tus pendientes. Filtra por género.',
@@ -191,17 +196,20 @@ export class Suggestions {
   constructor() {
     this.desktopQuery.addEventListener('change', (e) => this.desktop.set(e.matches));
     this.loadGenres();
-    this.load();
+    // The URL decides the type: /suggestions/books opens straight on books.
+    this.route.data.pipe(takeUntilDestroyed()).subscribe((data) => {
+      this.type.set((data['type'] as ItemType | undefined) ?? 'MOVIE');
+      // Chips are per type, so a genre cannot survive the switch.
+      this.genre.set(null);
+      this.load();
+    });
   }
 
   setType(type: ItemType): void {
     if (this.type() === type) {
       return;
     }
-    this.type.set(type);
-    // Chips are per type, so a genre cannot survive the switch.
-    this.genre.set(null);
-    this.load();
+    this.router.navigate(['/suggestions', this.typePaths[type]]);
   }
 
   setGenre(deckId: string | null): void {
