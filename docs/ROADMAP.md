@@ -55,8 +55,11 @@ Fuente de verdad del plan por fases. Claude lo lee al inicio de sesión y lo act
 ## Pendiente de decidir
 
 - Nada abierto. Siguiente fase: F6 (offline móvil, Capacitor).
+- **Aplazado — enlaces de afiliado en la ficha de libro** (anotado 2026-08-08): construir la URL desde el ISBN que ya guardamos en `attributes` y pintarla en la ficha. Coste estimado: una función de link building, un archivo. Por orden de retorno: altas de audiolibro/suscripción (Storytel, Audible, Kobo Plus, 5-10 € por registro) > Bookshop.org (cookie 45 días) > Amazon Afiliados ES (4,5 % en libro físico, cookie 24 h → ~0,90 € por libro de 20 €). No se hace ahora porque con los usuarios actuales recauda 0 €.
 
 ### Decisiones cerradas (para no reabrirlas)
+
+- **Keepory se queda gratis; si algún día monetiza, es por los libros** (2026-08-08). La API gratuita de TMDB es **solo uso no comercial**: sus ToS prohíben "derivar ingresos" de su contenido sin acuerdo escrito, y eso tumba tanto un freemium como los enlaces de afiliado puestos junto a sus datos. La licencia comercial (150 $) no sale a cuenta en este sector — Letterboxd, Trakt y Simkl regalan lo mismo, y el break-even pide ~6 suscriptores/año o ~75/mes según el tramo. Descartados también: anuncios, vender datos o exponer API propia. Los libros sí son terreno legal: Internet Archive **no reclama copyright** sobre los datos de Open Library (solo pide volumen bajo, no ser su backend) y un libro se compra, así que hay comisión — un streaming no paga por enviarle un espectador. Google Books sigue de fuente de datos con enlace y sin cachear, como ya estaba. Ver el aplazado de afiliados arriba.
 
 - **Google Books se queda como fuente de datos de libros; Open Library, solo covers** (2026-08-03). Evaluado con medidas, no de oído: Open Library es *work-centric* y devuelve siempre el título canónico en inglés — buscar "el imperio final" da "The Final Empire", y las sinopsis vienen en inglés y en una segunda llamada. Sacar el título de la edición española pide una llamada extra por obra (`fields=editions` con `language=spa` devuelve `numFound: 0`), y cada búsqueda tarda **2,0-2,8 s**: 20 sugerencias serían inviables. Gana en cover (`cover_i` directo, sin sonda HEAD por ISBN) y en valoraciones (`ratings_average` + count), pero no compensa perder título y sinopsis en español en una UI en español.
 
