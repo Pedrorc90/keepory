@@ -40,7 +40,7 @@ import { RouterLink } from '@angular/router';
 
       </div>
 
-      <a routerLink="/items" class="text-amber mt-10 inline-block text-sm hover:underline">← Volver a la biblioteca</a>
+      <a routerLink="/" class="text-amber mt-10 inline-block text-sm hover:underline">← Volver a la biblioteca</a>
     </div>
   `,
 })

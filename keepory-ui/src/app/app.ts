@@ -43,6 +43,10 @@ export class App {
   // The sidebar is a slide-over below md:, part of the layout from md: up.
   readonly drawerOpen = signal(false);
 
+  // The doorway has no shelf behind it: no sidebar, no hamburger, until a type is picked.
+  private readonly url = signal(this.router.url);
+  readonly onHome = computed(() => this.url().split('?')[0] === '/');
+
   // Sections the user folded away, kept across reloads.
   private readonly collapsedKey = 'keepory.sidebar.collapsed';
   private readonly collapsed = signal<ReadonlySet<ItemType>>(this.readCollapsed());
@@ -69,9 +73,10 @@ export class App {
       if (this.draggedItem()) this.dropError.set(null);
     });
     // Picking a collection on a phone should reveal the shelf behind the drawer.
-    this.router.events
-      .pipe(filter((event) => event instanceof NavigationEnd))
-      .subscribe(() => this.closeDrawer());
+    this.router.events.pipe(filter((event) => event instanceof NavigationEnd)).subscribe((event) => {
+      this.url.set(event.urlAfterRedirects);
+      this.closeDrawer();
+    });
   }
 
   toggleDrawer(): void {
@@ -210,7 +215,7 @@ export class App {
 
   private routeForType(type: ItemType | null): string {
     if (type === 'MOVIE') return '/movies';
-    return type === 'BOOK' ? '/books' : '/items';
+    return type === 'BOOK' ? '/books' : '/';
   }
 
   /** A collection only takes items of its own type. */

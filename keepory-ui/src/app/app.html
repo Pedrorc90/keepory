@@ -3,21 +3,23 @@
   @if (user()) {
   <header class="border-b border-line">
     <div class="mx-auto flex w-full sm:max-w-[92%] items-center sm:items-baseline gap-3 px-4 py-4">
-      <button
-        type="button"
-        (click)="toggleDrawer()"
-        [attr.aria-expanded]="drawerOpen()"
-        aria-controls="collections-drawer"
-        aria-label="Abrir las colecciones"
-        class="-ml-1.5 rounded-lg p-1.5 text-muted transition hover:text-paper md:hidden"
-      >
-        <svg class="h-5 w-5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-          <rect x="1" y="3" width="14" height="1.6" rx="0.8" />
-          <rect x="1" y="7.2" width="14" height="1.6" rx="0.8" />
-          <rect x="1" y="11.4" width="14" height="1.6" rx="0.8" />
-        </svg>
-      </button>
-      <a routerLink="/items" class="font-display text-2xl font-semibold tracking-tight">
+      @if (!onHome()) {
+        <button
+          type="button"
+          (click)="toggleDrawer()"
+          [attr.aria-expanded]="drawerOpen()"
+          aria-controls="collections-drawer"
+          aria-label="Abrir las colecciones"
+          class="-ml-1.5 rounded-lg p-1.5 text-muted transition hover:text-paper md:hidden"
+        >
+          <svg class="h-5 w-5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <rect x="1" y="3" width="14" height="1.6" rx="0.8" />
+            <rect x="1" y="7.2" width="14" height="1.6" rx="0.8" />
+            <rect x="1" y="11.4" width="14" height="1.6" rx="0.8" />
+          </svg>
+        </button>
+      }
+      <a routerLink="/" class="font-display text-2xl font-semibold tracking-tight" title="Elegir estantería">
         <img
           src="logo.png"
           alt=""
@@ -160,7 +162,7 @@
   </ng-template>
 
   <div class="mx-auto flex w-full flex-1 flex-col gap-8 px-4 py-8 sm:max-w-[92%] md:flex-row">
-    @if (user()) {
+    @if (user() && !onHome()) {
     @if (drawerOpen()) {
       <div class="fixed inset-0 z-30 bg-ink/70 md:hidden" (click)="closeDrawer()" aria-hidden="true"></div>
     }
@@ -182,20 +184,6 @@
           </button>
         </div>
         <nav class="flex flex-col gap-1.5" aria-label="Colecciones">
-          <a
-            routerLink="/items"
-            routerLinkActive="!border-amber/70 !bg-amber/10 !text-paper"
-            [routerLinkActiveOptions]="exactMatch"
-            class="group flex shrink-0 items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 text-sm text-muted transition hover:bg-paper/5 hover:text-paper"
-          >
-            <svg class="h-4 w-4 opacity-80" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <rect x="1" y="1" width="6" height="6" rx="1.5" />
-              <rect x="9" y="1" width="6" height="6" rx="1.5" />
-              <rect x="1" y="9" width="6" height="6" rx="1.5" />
-              <rect x="9" y="9" width="6" height="6" rx="1.5" />
-            </svg>
-            Todos
-          </a>
           <div class="flex shrink-0 items-center gap-1">
             <a
               routerLink="/movies"

@@ -13,5 +13,5 @@ export const authGuard: CanActivateFn = async () => {
 export const guestGuard: CanActivateFn = async () => {
   const auth = inject(AuthApi);
   const router = inject(Router);
-  return (await auth.ensureLoaded()) ? router.createUrlTree(['/items']) : true;
+  return (await auth.ensureLoaded()) ? router.createUrlTree(['/']) : true;
 };

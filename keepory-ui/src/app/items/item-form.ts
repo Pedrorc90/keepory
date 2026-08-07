@@ -38,7 +38,7 @@ import { MetadataSearchResult } from './metadata.model';
       @if (loadError()) {
         <p class="mt-6 rounded-md border border-rust/50 bg-rust/10 px-4 py-3 text-sm">
           {{ loadError() }}
-          <a routerLink="/items" class="ml-2 underline">Volver a la colección</a>
+          <a routerLink="/" class="ml-2 underline">Volver a la biblioteca</a>
         </p>
       } @else {
         <form [formGroup]="form" (ngSubmit)="save()" class="mt-6 grid gap-6">
@@ -260,7 +260,13 @@ import { MetadataSearchResult } from './metadata.model';
                   >
                     {{ saving() ? 'Guardando…' : 'Guardar' }}
                   </button>
-                  <a routerLink="/items" class="text-sm text-muted transition hover:text-paper">Cancelar</a>
+                  <button
+                    type="button"
+                    (click)="cancel()"
+                    class="text-sm text-muted transition hover:text-paper"
+                  >
+                    Cancelar
+                  </button>
                 </div>
               </div>
 
@@ -600,7 +606,7 @@ export class ItemForm {
     this.saveError.set(null);
     const call = this.id ? this.api.update(this.id, request) : this.api.create(request);
     call.subscribe({
-      next: (item) => this.saveCollections(item.id),
+      next: (item) => this.saveCollections(item.id, item.type),
       error: (err: HttpErrorResponse) => {
         this.saveError.set(
           err.status === 409
@@ -612,9 +618,18 @@ export class ItemForm {
     });
   }
 
-  private saveCollections(itemId: string): void {
+  /** Back to the shelf the item belongs to: there is no mixed list to return to. */
+  private shelfFor(type: ItemType | null | undefined): string {
+    return type === 'BOOK' ? '/books' : '/movies';
+  }
+
+  cancel(): void {
+    this.router.navigate([this.shelfFor(this.form.getRawValue().type)]);
+  }
+
+  private saveCollections(itemId: string, type: ItemType): void {
     this.collections.setForItem(itemId, this.selectedCollections()).subscribe({
-      next: () => this.router.navigate(['/items']),
+      next: () => this.router.navigate([this.shelfFor(type)]),
       error: () => {
         this.saveError.set('El elemento se guardó, pero no se pudieron actualizar sus colecciones.');
         this.saving.set(false);

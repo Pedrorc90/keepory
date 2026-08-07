@@ -66,7 +66,7 @@ export class Login {
     this.error.set(null);
     this.busy.set(true);
     this.auth.login(email.value.trim(), password.value, remember.checked).subscribe({
-      next: () => this.router.navigate(['/items']),
+      next: () => this.router.navigate(['/']),
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
         password.value = '';
