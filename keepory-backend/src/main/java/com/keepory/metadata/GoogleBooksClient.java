@@ -66,7 +66,8 @@ public class GoogleBooksClient {
     /**
      * Seed-driven discovery for suggestions: Spanish-only, relevance-ordered results
      * for an {@code inauthor:}/{@code subject:} query. Covers come straight from
-     * imageLinks — no Open Library HEAD probe, it would add one request per result.
+     * imageLinks — no Open Library HEAD probe, it would add one request per result —
+     * and volumes without one are dropped rather than shown blank.
      */
     public List<Suggestion> discover(String query) {
         SearchResponse response;
@@ -91,6 +92,9 @@ public class GoogleBooksClient {
                 .map(v -> new Suggestion(SOURCE, v.id(), v.volumeInfo().title(),
                         year(v.volumeInfo().publishedDate()), cover(v.volumeInfo().imageLinks()),
                         v.volumeInfo().description(), v.volumeInfo().averageRating()))
+                // A coverless card is a hole in the shelf, and a volume Google has no
+                // thumbnail for is a thin catalog record anyway: better dropped than shown.
+                .filter(s -> s.coverUrl() != null)
                 .toList();
     }
 

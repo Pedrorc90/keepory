@@ -62,6 +62,15 @@ export class SuggestionApi {
     return this.http.get<Suggestion[]>(`${this.baseUrl}/books`);
   }
 
+  bookGenres(): Observable<SuggestionGenre[]> {
+    return this.http.get<SuggestionGenre[]>(`${this.baseUrl}/books/genres`);
+  }
+
+  /** One genre shelf; unlike movies it takes no refresh, Google Books has one page. */
+  bookDeck(id: string): Observable<SuggestionDeck> {
+    return this.http.get<SuggestionDeck>(`${this.baseUrl}/books/${id}`);
+  }
+
   dismiss(suggestion: Suggestion): Observable<void> {
     return this.http.post<void>(`${this.baseUrl}/dismiss`, {
       source: suggestion.source,

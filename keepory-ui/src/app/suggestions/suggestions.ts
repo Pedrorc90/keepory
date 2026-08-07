@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { map } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { ItemType } from '../items/item.model';
 import { Suggestion, SuggestionApi, SuggestionDeck, SuggestionGenre } from './suggestion-api';
 import { SuggestionDeckView } from './suggestion-deck';
@@ -40,7 +40,7 @@ interface SuggestionTexts {
         }
       </div>
 
-      @if (type() === 'MOVIE' && genreGroups().length) {
+      @if (genreGroups().length) {
         <div class="mx-auto mt-4 max-w-3xl">
           <div class="flex justify-center">
             <button
@@ -145,7 +145,7 @@ export class Suggestions {
       loadError: 'No se pudieron cargar las sugerencias. ¿Está configurada la key de TMDB?',
     },
     BOOK: {
-      tagline: 'Libros afines a lo que ya has leído.',
+      tagline: 'Libros afines a lo que ya has leído. Filtra por género.',
       completed: 'Leído',
       duplicate: 'Este libro ya está en tu colección.',
       emptyHint: 'Marca libros como completados para afinar las sugerencias.',
@@ -160,7 +160,10 @@ export class Suggestions {
   readonly type = signal<ItemType>('MOVIE');
   readonly labels = computed(() => this.texts[this.type()]);
   readonly sections = signal<SuggestionDeck[]>([]);
-  readonly genres = signal<SuggestionGenre[]>([]);
+  private readonly movieChips = signal<SuggestionGenre[]>([]);
+  private readonly bookChips = signal<SuggestionGenre[]>([]);
+  /** Both shelves browse by genre, each with its own chips. */
+  readonly genres = computed(() => (this.type() === 'BOOK' ? this.bookChips() : this.movieChips()));
   /** One chip row per axis, in the order the backend sends them. */
   readonly genreGroups = computed(() => {
     const groups = new Map<string, SuggestionGenre[]>();
@@ -196,7 +199,7 @@ export class Suggestions {
       return;
     }
     this.type.set(type);
-    // Genres only exist for movies; going back to them starts unfiltered.
+    // Chips are per type, so a genre cannot survive the switch.
     this.genre.set(null);
     this.load();
   }
@@ -213,20 +216,7 @@ export class Suggestions {
     this.loading.set(true);
     this.loadError.set(null);
     this.refreshError.set(null);
-    const genre = this.genre();
-    const sections$ =
-      this.type() === 'BOOK'
-        ? this.suggestionApi.books().pipe(
-            map((suggestions): SuggestionDeck[] =>
-              suggestions.length ? [this.bookSection(suggestions)] : [],
-            ),
-          )
-        : genre
-          ? this.suggestionApi.movieDeck(genre).pipe(
-              map((deck): SuggestionDeck[] => (deck.suggestions.length ? [deck] : [])),
-            )
-          : this.suggestionApi.movieDecks();
-    sections$.subscribe({
+    this.sections$().subscribe({
       next: (sections) => {
         this.sections.set(sections);
         this.loading.set(false);
@@ -238,6 +228,28 @@ export class Suggestions {
     });
   }
 
+  /** A chip shows that one genre alone; without one, the personalized rows. */
+  private sections$(): Observable<SuggestionDeck[]> {
+    const genre = this.genre();
+    const oneDeck = map((deck: SuggestionDeck): SuggestionDeck[] =>
+      deck.suggestions.length ? [deck] : [],
+    );
+    if (this.type() === 'BOOK') {
+      return genre
+        ? this.suggestionApi.bookDeck(genre).pipe(oneDeck)
+        : this.suggestionApi
+            .books()
+            .pipe(
+              map((suggestions): SuggestionDeck[] =>
+                suggestions.length ? [this.bookSection(suggestions)] : [],
+              ),
+            );
+    }
+    return genre
+      ? this.suggestionApi.movieDeck(genre).pipe(oneDeck)
+      : this.suggestionApi.movieDecks();
+  }
+
   refreshSection(id: string): void {
     if (this.refreshingId() !== null) {
       return;
@@ -247,7 +259,9 @@ export class Suggestions {
     const deck$ =
       this.type() === 'MOVIE'
         ? this.suggestionApi.movieDeck(id, true)
-        : this.suggestionApi.books().pipe(map((suggestions) => this.bookSection(suggestions)));
+        : this.genre()
+          ? this.suggestionApi.bookDeck(id)
+          : this.suggestionApi.books().pipe(map((suggestions) => this.bookSection(suggestions)));
     deck$.subscribe({
       next: (deck) => {
         this.sections.update((sections) => sections.map((s) => (s.id === id ? deck : s)));
@@ -260,11 +274,15 @@ export class Suggestions {
     });
   }
 
-  // Without the TMDB key this fails; the chips just stay hidden.
+  // Without the provider key these fail; the chips just stay hidden.
   private loadGenres(): void {
     this.suggestionApi.movieGenres().subscribe({
-      next: (genres) => this.genres.set(genres),
-      error: () => this.genres.set([]),
+      next: (genres) => this.movieChips.set(genres),
+      error: () => this.movieChips.set([]),
+    });
+    this.suggestionApi.bookGenres().subscribe({
+      next: (genres) => this.bookChips.set(genres),
+      error: () => this.bookChips.set([]),
     });
   }
 

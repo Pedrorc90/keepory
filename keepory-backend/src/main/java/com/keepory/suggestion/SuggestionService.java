@@ -31,6 +31,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -284,6 +285,37 @@ public class SuggestionService {
 
     public List<Suggestion> books() {
         List<Item> books = items.findByTypeAndUserIdAndDeletedAtIsNull(ItemType.BOOK, currentUser.id());
+        // Google Books has no recommendations endpoint: completed books seed
+        // author/subject searches instead.
+        List<Item> seeds = new ArrayList<>(books.stream()
+                .filter(i -> i.getStatus() == ItemStatus.COMPLETED && !seedQueries(i).isEmpty())
+                .toList());
+        Collections.shuffle(seeds);
+        return bookSuggestions(books, seeds.subList(0, Math.min(MAX_SEEDS, seeds.size())).stream()
+                .flatMap(seed -> seedQueries(seed).stream())
+                .toList());
+    }
+
+    /** The book chips, mirroring what {@link #movieGenres()} does for films. */
+    public List<SuggestionGenre> bookGenres() {
+        return BOOK_GENRES.stream()
+                .map(g -> new SuggestionGenre(g.deckId(), g.name(), GENRE_GROUP))
+                .toList();
+    }
+
+    // One Google Books query, so no refresh flag: the API orders by relevance and
+    // has no page worth walking to once the first 20 are filtered.
+    public SuggestionDeck bookDeck(String deckId) {
+        BookGenre genre = BOOK_GENRES.stream()
+                .filter(g -> g.deckId().equals(deckId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Unknown deck id: " + deckId));
+        List<Item> books = items.findByTypeAndUserIdAndDeletedAtIsNull(ItemType.BOOK, currentUser.id());
+        return new SuggestionDeck(deckId, genre.name(),
+                bookSuggestions(books, List.of("subject:\"%s\"".formatted(genre.subject()))));
+    }
+
+    private List<Suggestion> bookSuggestions(List<Item> books, List<String> queries) {
         Set<String> inCollection = books.stream()
                 .filter(i -> GoogleBooksClient.SOURCE.equals(i.getSource()))
                 .map(Item::getExternalId)
@@ -295,44 +327,35 @@ public class SuggestionService {
                 .collect(Collectors.toSet());
         Set<String> dismissed = dismissed(GoogleBooksClient.SOURCE);
 
-        // Google Books has no recommendations endpoint: completed books seed
-        // author/subject searches instead.
-        List<Item> seeds = new ArrayList<>(books.stream()
-                .filter(i -> i.getStatus() == ItemStatus.COMPLETED && !seedQueries(i).isEmpty())
-                .toList());
-        Collections.shuffle(seeds);
-
         // Keyed by normalized title so repeated editions collapse into one suggestion.
         Map<String, Suggestion> byTitle = new LinkedHashMap<>();
         Map<String, Integer> hits = new HashMap<>();
         int failedQueries = 0;
-        for (Item seed : seeds.subList(0, Math.min(MAX_SEEDS, seeds.size()))) {
-            for (String query : seedQueries(seed)) {
-                List<Suggestion> found;
-                try {
-                    found = googleBooks.discover(query);
-                } catch (MetadataProviderException ex) {
-                    // Google Books still 503s ~2-3% of queries after retries; one bad
-                    // query must not sink the whole deck.
-                    failedQueries++;
+        for (String query : queries) {
+            List<Suggestion> found;
+            try {
+                found = googleBooks.discover(query);
+            } catch (MetadataProviderException ex) {
+                // Google Books still 503s ~2-3% of queries after retries; one bad
+                // query must not sink the whole deck.
+                failedQueries++;
+                continue;
+            }
+            for (Suggestion suggestion : found) {
+                String title = normalize(suggestion.title());
+                if (inCollection.contains(suggestion.externalId()) || dismissed.contains(suggestion.externalId())
+                        || owned(ownedTitles, title)) {
                     continue;
                 }
-                for (Suggestion suggestion : found) {
-                    String title = normalize(suggestion.title());
-                    if (inCollection.contains(suggestion.externalId()) || dismissed.contains(suggestion.externalId())
-                            || ownedTitles.contains(title)) {
-                        continue;
-                    }
-                    byTitle.putIfAbsent(title, suggestion);
-                    hits.merge(title, 1, Integer::sum);
-                }
+                byTitle.putIfAbsent(title, suggestion);
+                hits.merge(title, 1, Integer::sum);
             }
         }
         if (byTitle.isEmpty() && failedQueries > 0) {
             throw new MetadataProviderException(
                     "Google Books discovery failed for all %d queries".formatted(failedQueries));
         }
-        return top(byTitle, s -> hits.get(normalize(s.title())), MAX_RESULTS);
+        return top(collapseVariants(byTitle, hits), s -> hits.get(normalize(s.title())), MAX_RESULTS);
     }
 
     public void dismiss(String source, String externalId) {
@@ -404,6 +427,25 @@ public class SuggestionService {
             Map.entry("literary", "Narrativa"),
             Map.entry("poetry", "Poesía"));
 
+    private record BookGenre(String deckId, String name, String subject) {
+    }
+
+    // A fixed shelf rather than one derived from the library: Google Books returns
+    // BISAC labels in English and wildly uneven per book, so derived chips would read
+    // as noise. Subject terms reuse the wording measured in SPANISH_SUBJECTS —
+    // "Fantasia" stays unaccented on purpose, the accented form is barely indexed.
+    private static final List<BookGenre> BOOK_GENRES = List.of(
+            new BookGenre(GENRE_PREFIX + "novela-negra", "Novela negra", "Novela negra"),
+            new BookGenre(GENRE_PREFIX + "ciencia-ficcion", "Ciencia ficción", "Ciencia ficción"),
+            new BookGenre(GENRE_PREFIX + "fantasia", "Fantasía", "Fantasia"),
+            new BookGenre(GENRE_PREFIX + "novela-historica", "Novela histórica", "Novela histórica"),
+            new BookGenre(GENRE_PREFIX + "terror", "Terror", "Terror"),
+            new BookGenre(GENRE_PREFIX + "novela-romantica", "Novela romántica", "Novela romántica"),
+            new BookGenre(GENRE_PREFIX + "aventuras", "Aventuras", "Aventuras"),
+            new BookGenre(GENRE_PREFIX + "biografia", "Biografía", "Biografía"),
+            new BookGenre(GENRE_PREFIX + "ensayo", "Ensayo", "Ensayo"),
+            new BookGenre(GENRE_PREFIX + "poesia", "Poesía", "Poesía"));
+
     // BISAC-style categories ("Fiction / Fantasy / General") are too specific for
     // subject search; the middle segment is the useful genre term.
     private static String subject(String category) {
@@ -435,20 +477,62 @@ public class SuggestionService {
     }
 
     // Collapses editions of the same work: case, accents and punctuation are
-    // ignored, and subtitles after ':' or '(' are dropped, as is the translated
-    // half of bilingual titles ("El héroe de las eras / The Hero of Ages").
+    // ignored, parenthesised annotations are dropped, as is the translated half of
+    // bilingual titles ("El héroe de las eras / The Hero of Ages"). Text after ':'
+    // is kept: the half worth dropping is sometimes the left one ("Mistborn: El
+    // imperio final"), so collapseVariants() sorts those out by containment.
     private static String normalize(String title) {
         String base = title;
-        for (String marker : new String[] {":", "(", " / "}) {
+        for (String marker : new String[] {"(", "[", " / "}) {
             int i = base.indexOf(marker);
             if (i > 0) {
                 base = base.substring(0, i);
             }
         }
+        base = SERIES_PREFIX.matcher(base).replaceFirst("");
         return Normalizer.normalize(base, Normalizer.Form.NFD)
                 .replaceAll("[\\p{M}\\p{Punct}]", "")
                 .toLowerCase()
                 .trim()
                 .replaceAll("\\s+", " ");
+    }
+
+    // "Nacidos de la bruma 1. El imperio final": series name and volume number glued
+    // in front of the real title. Anchored on the "N." so numeric titles ("1984")
+    // and years inside a title are left alone.
+    private static final Pattern SERIES_PREFIX = Pattern.compile("^\\D{2,}?\\s\\d{1,2}\\.\\s+");
+
+    // Google Books hands back one work under several titles — series in front, with
+    // the subtitle spelled out, or plain — and no two share a volume id, so the map
+    // above cannot see them as one. When a normalized title contains another whole,
+    // they are the same book: the shortest form wins, being the canonical one.
+    private static Map<String, Suggestion> collapseVariants(Map<String, Suggestion> byTitle,
+                                                            Map<String, Integer> hits) {
+        List<String> keys = new ArrayList<>(byTitle.keySet());
+        keys.sort(Comparator.comparingInt(String::length));
+        Map<String, Suggestion> kept = new LinkedHashMap<>();
+        for (String key : keys) {
+            String canonical = kept.keySet().stream()
+                    .filter(shorter -> contains(key, shorter))
+                    .findFirst()
+                    .orElse(null);
+            if (canonical == null) {
+                kept.put(key, byTitle.get(key));
+            } else {
+                hits.merge(canonical, hits.getOrDefault(key, 0), Integer::sum);
+            }
+        }
+        return kept;
+    }
+
+    // An owned book also hides the variants of its title, not just the exact match.
+    private static boolean owned(Set<String> ownedTitles, String title) {
+        return ownedTitles.contains(title) || ownedTitles.stream().anyMatch(o -> contains(title, o));
+    }
+
+    // Whole words only, and never on a one-word title: "Dune" turns up inside half
+    // the sci-fi shelf, while "el imperio final" identifies a single book.
+    private static boolean contains(String title, String other) {
+        return other.indexOf(' ') > 0 && (" " + title + " ").contains(" " + other + " ");
     }
 }

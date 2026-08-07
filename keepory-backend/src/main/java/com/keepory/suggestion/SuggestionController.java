@@ -51,6 +51,16 @@ public class SuggestionController {
         return service.books();
     }
 
+    @GetMapping("/books/genres")
+    public List<SuggestionGenre> bookGenres() {
+        return service.bookGenres();
+    }
+
+    @GetMapping("/books/{deckId}")
+    public SuggestionDeck bookDeck(@PathVariable String deckId) {
+        return service.bookDeck(deckId);
+    }
+
     @PostMapping("/dismiss")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void dismiss(@RequestBody DismissRequest request) {
