@@ -48,42 +48,32 @@ type ShelfView = 'collections' | 'items' | 'all';
       @if (countLabel(); as label) {
         <span class="text-sm text-muted">{{ label }}</span>
       }
+    </div>
+
+    <div class="mt-7">
+    <div class="flex w-fit mx-auto items-center gap-3">
+      <a
+        [routerLink]="suggestionsLink()"
+        class="group flex items-center gap-2 rounded-full bg-amber px-5 py-2.5 text-sm font-semibold text-ink shadow-md shadow-amber/20 transition hover:brightness-110 hover:shadow-lg hover:shadow-amber/30"
+      >
+        <svg class="h-4 w-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M6.5 1l1.3 4.2L12 6.5 7.8 7.8 6.5 12 5.2 7.8 1 6.5l4.2-1.3z" />
+          <path d="M12 9l.7 2.3 2.3.7-2.3.7-.7 2.3-.7-2.3L9 12l2.3-.7z" />
+        </svg>
+        Descubrir
+        <span class="inline-block transition group-hover:translate-x-0.5">→</span>
+      </a>
       <a
         routerLink="/items/new"
-        class="ml-auto rounded-md bg-amber px-4 py-2 text-sm font-medium text-ink transition hover:brightness-110"
+        class="flex items-center gap-1.5 rounded-full border border-amber/50 bg-amber/10 px-4 py-2.5 text-sm font-medium text-amber transition hover:border-amber hover:bg-amber/15"
       >
-        Añadir
+        <span aria-hidden="true">+</span> Añadir
       </a>
     </div>
 
-    <div class="mt-7 items-start gap-8 md:flex">
-      <aside class="md:order-last md:w-36 md:shrink-0">
-        <p class="mb-2 hidden text-xs uppercase tracking-wide text-muted md:block">Estado</p>
-        <nav class="flex flex-wrap gap-2 md:flex-col md:items-start" aria-label="Filtrar por estado">
-          @for (bubble of statusBubbles; track bubble.label) {
-            <button
-              (click)="filterByStatus(bubble.value)"
-              [attr.aria-pressed]="status() === bubble.value"
-              class="flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition focus-visible:outline-none"
-              [class]="
-                status() === bubble.value
-                  ? 'border-amber bg-amber/15 text-paper'
-                  : 'border-line text-muted hover:border-amber/60 hover:text-paper'
-              "
-            >
-              @if (bubble.value) {
-                <span class="h-2 w-2 rounded-full" [class]="spineClasses[bubble.value]"></span>
-              }
-              {{ bubble.label }}
-            </button>
-          }
-        </nav>
-      </aside>
-
-      <div class="mt-7 min-w-0 flex-1 md:mt-0">
     @if (!collectionId()) {
       <nav
-        class="mx-auto mb-3 flex w-fit rounded-lg border border-line bg-panel/60 p-0.5 text-sm"
+        class="mx-auto mt-4 flex w-fit rounded-lg border border-line bg-panel/60 p-0.5 text-sm"
         aria-label="Cambiar de vista"
       >
         @for (option of viewOptions(); track option.value) {
@@ -98,13 +88,14 @@ type ShelfView = 'collections' | 'items' | 'all';
         }
       </nav>
     }
-    <div class="flex flex-wrap items-center gap-2">
+
+    <div class="mt-4 flex flex-wrap items-center justify-center gap-2">
       <input
         type="search"
         [value]="q()"
         (input)="search($any($event.target).value)"
         [placeholder]="view() === 'collections' ? 'Buscar colección…' : 'Buscar por título…'"
-        class="min-w-48 flex-1 rounded-md border border-line bg-panel px-3 py-2 text-sm placeholder:text-muted focus:border-amber focus:outline-none"
+        class="min-w-40 max-w-xs flex-1 rounded-md border border-line/60 bg-transparent px-3 py-1.5 text-sm text-muted placeholder:text-muted/70 focus:border-amber/60 focus:text-paper focus:outline-none"
         [attr.aria-label]="view() === 'collections' ? 'Buscar colección' : 'Buscar por título'"
       />
       @if (view() !== 'collections') {
@@ -113,7 +104,7 @@ type ShelfView = 'collections' | 'items' | 'all';
         <select
           [value]="sort()"
           (change)="sortBy($any($event.target).value)"
-          class="rounded-md border border-line bg-panel px-2.5 py-2 text-sm text-paper focus:border-amber focus:outline-none"
+          class="rounded-md border border-line/60 bg-transparent px-2.5 py-1.5 text-sm text-muted focus:border-amber/60 focus:outline-none"
         >
           @for (option of sortOptions; track option.value) {
             <option [value]="option.value">{{ option.label }}</option>
@@ -121,26 +112,26 @@ type ShelfView = 'collections' | 'items' | 'all';
         </select>
       </label>
       }
+      <nav class="flex flex-wrap items-center gap-1.5" aria-label="Filtrar por estado">
+        @for (bubble of statusBubbles; track bubble.label) {
+          <button
+            (click)="filterByStatus(bubble.value)"
+            [attr.aria-pressed]="status() === bubble.value"
+            class="flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition focus-visible:outline-none"
+            [class]="
+              status() === bubble.value
+                ? 'border-amber bg-amber/15 text-paper'
+                : 'border-line text-muted hover:border-amber/60 hover:text-paper'
+            "
+          >
+            @if (bubble.value) {
+              <span class="h-1.5 w-1.5 rounded-full" [class]="spineClasses[bubble.value]"></span>
+            }
+            {{ bubble.label }}
+          </button>
+        }
+      </nav>
     </div>
-
-    <a
-      [routerLink]="suggestionsLink()"
-      class="group mx-auto mt-3 flex w-fit items-center gap-2 rounded-full border border-line bg-panel/60 py-1.5 pl-3 pr-3.5 text-sm text-muted transition hover:border-amber/60 hover:bg-amber/10 hover:text-paper"
-    >
-      <svg
-        class="h-3.5 w-3.5 text-amber/80 transition group-hover:text-amber"
-        viewBox="0 0 16 16"
-        fill="currentColor"
-        aria-hidden="true"
-      >
-        <path d="M6.5 1l1.3 4.2L12 6.5 7.8 7.8 6.5 12 5.2 7.8 1 6.5l4.2-1.3z" />
-        <path d="M12 9l.7 2.3 2.3.7-2.3.7-.7 2.3-.7-2.3L9 12l2.3-.7z" />
-      </svg>
-      Descubrir
-      <span class="inline-block text-muted/60 transition group-hover:translate-x-0.5 group-hover:text-amber">
-        →
-      </span>
-    </a>
 
     @if (error()) {
       <p class="mt-8 rounded-md border border-rust/50 bg-rust/10 px-4 py-3 text-sm">{{ error() }}</p>
@@ -375,7 +366,6 @@ type ShelfView = 'collections' | 'items' | 'all';
         }
       }
     }
-      </div>
     </div>
 
     @if (picker(); as item) {
