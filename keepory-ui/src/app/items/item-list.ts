@@ -282,6 +282,15 @@ type ShelfView = 'collections' | 'items' | 'all';
                         <rect x="10.5" y="27" width="3" height="4.5" rx="1" />
                       </g>
                     </svg>
+                  } @else if (item.type === 'SERIES') {
+                    <svg class="absolute right-2 top-0 h-10 w-4 text-dusk drop-shadow-md" viewBox="0 0 16 40" aria-hidden="true">
+                      <rect width="16" height="40" fill="currentColor" />
+                      <g fill="rgba(0, 0, 0, 0.45)">
+                        <rect x="3" y="4" width="10" height="7" rx="1.5" />
+                        <rect x="3" y="14" width="10" height="7" rx="1.5" />
+                        <rect x="3" y="24" width="10" height="7" rx="1.5" />
+                      </g>
+                    </svg>
                   } @else if (item.type === 'BOOK') {
                     <svg class="absolute right-2 top-0 h-10 w-4 text-moss drop-shadow-md" viewBox="0 0 16 40" aria-hidden="true">
                       <path d="M0 0h16v40l-8-7-8 7z" fill="currentColor" />
@@ -441,6 +450,8 @@ export class ItemList {
     switch (this.type()) {
       case 'MOVIE':
         return 'Movies';
+      case 'SERIES':
+        return 'Series';
       case 'BOOK':
         return 'Books';
       default:
@@ -448,9 +459,16 @@ export class ItemList {
     }
   });
   /** Discover opens on the shelf you are browsing. */
-  readonly suggestionsLink = computed(() =>
-    this.type() === 'BOOK' ? '/suggestions/books' : '/suggestions/movies',
-  );
+  readonly suggestionsLink = computed(() => {
+    switch (this.type()) {
+      case 'SERIES':
+        return '/suggestions/series';
+      case 'BOOK':
+        return '/suggestions/books';
+      default:
+        return '/suggestions/movies';
+    }
+  });
   readonly sort = signal<ItemSort>('recent');
   readonly status = signal<ItemStatus | ''>('');
   readonly q = signal('');
@@ -467,6 +485,8 @@ export class ItemList {
     switch (this.type()) {
       case 'MOVIE':
         return 'Películas';
+      case 'SERIES':
+        return 'Series';
       case 'BOOK':
         return 'Libros';
       default:

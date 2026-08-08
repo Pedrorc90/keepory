@@ -226,6 +226,47 @@
           }
           <div class="flex shrink-0 items-center gap-1">
             <a
+              routerLink="/series"
+              routerLinkActive="!border-dusk/60 !bg-dusk/10 !text-paper"
+              [routerLinkActiveOptions]="exactMatch"
+              class="group flex flex-1 shrink-0 items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 text-sm text-muted transition hover:bg-paper/5 hover:text-paper"
+            >
+              <svg class="h-4 w-4 text-dusk" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M4.15 1.05 7.6 4.5l-.9.9L3.25 1.95z" />
+                <path d="M11.85 1.05 8.4 4.5l.9.9 3.45-3.45z" />
+                <rect x="1" y="4" width="14" height="11" rx="2" />
+                <g fill="rgba(0, 0, 0, 0.45)">
+                  <rect x="2.5" y="5.5" width="9" height="8" rx="0.75" />
+                  <rect x="12.5" y="6" width="1.5" height="1.5" rx="0.4" />
+                  <rect x="12.5" y="8.5" width="1.5" height="1.5" rx="0.4" />
+                </g>
+              </svg>
+              Series
+            </a>
+            <ng-container
+              [ngTemplateOutlet]="sectionToggle"
+              [ngTemplateOutletContext]="{ $implicit: 'SERIES', label: 'series', count: seriesCollections().length }"
+            />
+          </div>
+          @if (sectionOpen('SERIES')) {
+            @for (collection of visibleCollections(seriesCollections(), 'SERIES'); track collection.id) {
+              <ng-container
+                [ngTemplateOutlet]="collectionRow"
+                [ngTemplateOutletContext]="{
+                  $implicit: collection,
+                  link: '/series',
+                  active: '!border-dusk/50 !bg-dusk/10 !text-paper'
+                }"
+              />
+            }
+            <ng-container
+              [ngTemplateOutlet]="showMoreTpl"
+              [ngTemplateOutletContext]="{ $implicit: 'SERIES', total: seriesCollections().length }"
+            />
+            <ng-container [ngTemplateOutlet]="newCollection" [ngTemplateOutletContext]="{ $implicit: 'SERIES' }" />
+          }
+          <div class="flex shrink-0 items-center gap-1">
+            <a
               routerLink="/books"
               routerLinkActive="!border-moss/60 !bg-moss/10 !text-paper"
               [routerLinkActiveOptions]="exactMatch"

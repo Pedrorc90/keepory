@@ -58,6 +58,25 @@ export class SuggestionApi {
     return this.http.get<Suggestion[]>(`${this.baseUrl}/movies/similar/${externalId}`);
   }
 
+  seriesDecks(): Observable<SuggestionDeck[]> {
+    return this.http.get<SuggestionDeck[]>(`${this.baseUrl}/series`);
+  }
+
+  seriesGenres(): Observable<SuggestionGenre[]> {
+    return this.http.get<SuggestionGenre[]>(`${this.baseUrl}/series/genres`);
+  }
+
+  seriesDeck(id: string, refresh = false): Observable<SuggestionDeck> {
+    return this.http.get<SuggestionDeck>(`${this.baseUrl}/series/${id}`, {
+      params: refresh ? { refresh: true } : {},
+    });
+  }
+
+  /** What TMDB recommends for one series, shown while editing it. */
+  similarSeries(externalId: string): Observable<Suggestion[]> {
+    return this.http.get<Suggestion[]>(`${this.baseUrl}/series/similar/${externalId}`);
+  }
+
   books(): Observable<Suggestion[]> {
     return this.http.get<Suggestion[]>(`${this.baseUrl}/books`);
   }

@@ -8,6 +8,7 @@ import com.keepory.item.ItemType;
 import com.keepory.metadata.GoogleBooksClient;
 import com.keepory.metadata.MetadataProviderException;
 import com.keepory.metadata.TmdbClient;
+import com.keepory.metadata.TmdbMedia;
 import com.keepory.suggestion.dto.Suggestion;
 import com.keepory.suggestion.dto.SuggestionDeck;
 import com.keepory.suggestion.dto.SuggestionGenre;
@@ -53,6 +54,7 @@ public class SuggestionService {
     private static final int OLDEST_DECADE = 1990;
     private static final String LATEST_DECK_ID = "latest";
     private static final String LATEST_TITLE = "Novedades en cartelera";
+    private static final String SERIES_LATEST_TITLE = "Novedades en emisión";
     private static final String COMPLETED_TITLE = "Afines a tus vistas";
     private static final String PENDING_TITLE = "Afines a tus pendientes";
     private static final String GENRE_PREFIX = "genre-";
@@ -85,7 +87,7 @@ public class SuggestionService {
         // What is out right now leads: it is the only row that does not depend on
         // the shelf, so it has something to show even for an empty library.
         addDeck(decks, excluded, LATEST_DECK_ID, LATEST_TITLE,
-                fill((page, floor) -> tmdb.nowPlaying(page), false, excluded, NO_FLOORS));
+                fill((page, floor) -> tmdb.nowPlaying(TmdbMedia.MOVIE, page), false, excluded, NO_FLOORS));
         addDeck(decks, excluded, "completed", COMPLETED_TITLE,
                 statusDeck(movies, ItemStatus.COMPLETED, excluded));
         addDeck(decks, excluded, "pending", PENDING_TITLE,
@@ -97,13 +99,13 @@ public class SuggestionService {
     // Providers and trailers cost one TMDB call per title, so they are fetched
     // for the final deck instead of every candidate fill() walked past.
     private SuggestionDeck enriched(SuggestionDeck deck) {
-        return new SuggestionDeck(deck.id(), deck.title(), tmdb.enrich(deck.suggestions()));
+        return new SuggestionDeck(deck.id(), deck.title(), tmdb.enrich(TmdbMedia.MOVIE, deck.suggestions()));
     }
 
     // Every deck in a single burst rather than one per deck: enrich() fans out
     // over virtual threads, so 45 detail calls take the wall-clock of 15.
     private List<SuggestionDeck> enriched(List<SuggestionDeck> decks) {
-        List<Suggestion> all = tmdb.enrich(decks.stream()
+        List<Suggestion> all = tmdb.enrich(TmdbMedia.MOVIE, decks.stream()
                 .flatMap(deck -> deck.suggestions().stream())
                 .toList());
         List<SuggestionDeck> result = new ArrayList<>(decks.size());
@@ -124,7 +126,7 @@ public class SuggestionService {
     }
 
     private List<SuggestionGenre> genreFacets() {
-        return tmdb.genreIdsByName().entrySet().stream()
+        return tmdb.genreIdsByName(TmdbMedia.MOVIE).entrySet().stream()
                 .map(entry -> new SuggestionGenre(GENRE_PREFIX + entry.getValue(),
                         capitalize(entry.getKey()), GENRE_GROUP))
                 .sorted(Comparator.comparing(SuggestionGenre::name))
@@ -154,7 +156,7 @@ public class SuggestionService {
         Set<String> excluded = baseExclusions(movies);
         return enriched(switch (deckId) {
             case LATEST_DECK_ID -> new SuggestionDeck(deckId, LATEST_TITLE,
-                    fill((page, floor) -> tmdb.nowPlaying(page), refresh, excluded, NO_FLOORS));
+                    fill((page, floor) -> tmdb.nowPlaying(TmdbMedia.MOVIE, page), refresh, excluded, NO_FLOORS));
             case "completed" -> new SuggestionDeck(deckId, COMPLETED_TITLE,
                     statusDeck(movies, ItemStatus.COMPLETED, excluded));
             case "pending" -> new SuggestionDeck(deckId, PENDING_TITLE,
@@ -167,13 +169,13 @@ public class SuggestionService {
         if (deckId.startsWith(GENRE_PREFIX)) {
             int genreId = idIn(deckId, GENRE_PREFIX);
             return new SuggestionDeck(deckId, capitalize(genreName(genreId)),
-                    fill((page, floor) -> tmdb.discoverByGenre(genreId, page, floor),
+                    fill((page, floor) -> tmdb.discoverByGenre(TmdbMedia.MOVIE, genreId, page, floor),
                             refresh, excluded, VOTE_FLOORS));
         }
         if (deckId.startsWith(DECADE_PREFIX)) {
             int startYear = idIn(deckId, DECADE_PREFIX);
             return new SuggestionDeck(deckId, decadeName(startYear),
-                    fill((page, floor) -> tmdb.discoverByDecade(startYear, page, floor),
+                    fill((page, floor) -> tmdb.discoverByDecade(TmdbMedia.MOVIE, startYear, page, floor),
                             refresh, excluded, VOTE_FLOORS));
         }
         throw new IllegalArgumentException("Unknown deck id: " + deckId);
@@ -188,7 +190,7 @@ public class SuggestionService {
     }
 
     private String genreName(int genreId) {
-        return tmdb.genreIdsByName().entrySet().stream()
+        return tmdb.genreIdsByName(TmdbMedia.MOVIE).entrySet().stream()
                 .filter(entry -> entry.getValue() == genreId)
                 .map(Map.Entry::getKey)
                 .findFirst()
@@ -211,7 +213,7 @@ public class SuggestionService {
         Map<String, Suggestion> byId = new LinkedHashMap<>();
         Map<String, Integer> hits = new HashMap<>();
         for (Item seed : seeds.subList(0, Math.min(SEEDS_PER_DECK, seeds.size()))) {
-            collect(tmdb.recommendations(seed.getExternalId()), byId, hits, excluded);
+            collect(tmdb.recommendations(TmdbMedia.MOVIE, seed.getExternalId()), byId, hits, excluded);
         }
         return top(byId, s -> hits.get(s.externalId()), DECK_SIZE);
     }
@@ -223,8 +225,122 @@ public class SuggestionService {
                 ItemType.MOVIE, TmdbClient.SOURCE, currentUser.id());
         Map<String, Suggestion> byId = new LinkedHashMap<>();
         Map<String, Integer> hits = new HashMap<>();
-        collect(tmdb.recommendations(externalId), byId, hits, baseExclusions(movies));
-        return tmdb.enrich(top(byId, s -> hits.get(s.externalId()), DECK_SIZE));
+        collect(tmdb.recommendations(TmdbMedia.MOVIE, externalId), byId, hits, baseExclusions(movies));
+        return tmdb.enrich(TmdbMedia.MOVIE, top(byId, s -> hits.get(s.externalId()), DECK_SIZE));
+    }
+
+    // Series run on their own copy of the block above rather than a shared one:
+    // the two shelves are free to drift apart, and a change to one cannot take
+    // the other down with it.
+
+    public List<SuggestionDeck> seriesDecks() {
+        List<Item> series = items.findByTypeAndSourceAndUserIdAndDeletedAtIsNull(
+                ItemType.SERIES, TmdbClient.SOURCE, currentUser.id());
+        Set<String> excluded = baseExclusions(series);
+
+        List<SuggestionDeck> decks = new ArrayList<>();
+        addDeck(decks, excluded, LATEST_DECK_ID, SERIES_LATEST_TITLE,
+                fill((page, floor) -> tmdb.nowPlaying(TmdbMedia.TV, page), false, excluded, NO_FLOORS));
+        addDeck(decks, excluded, "completed", COMPLETED_TITLE,
+                seriesStatusDeck(series, ItemStatus.COMPLETED, excluded));
+        addDeck(decks, excluded, "pending", PENDING_TITLE,
+                seriesStatusDeck(series, ItemStatus.PENDING, excluded));
+        return seriesEnriched(decks);
+    }
+
+    /** The series chips: TMDB's television genres, which are not the film ones. */
+    public List<SuggestionGenre> seriesGenres() {
+        List<SuggestionGenre> facets = new ArrayList<>(seriesGenreFacets());
+        facets.addAll(decadeFacets());
+        return facets;
+    }
+
+    public SuggestionDeck seriesDeck(String deckId, boolean refresh) {
+        List<Item> series = items.findByTypeAndSourceAndUserIdAndDeletedAtIsNull(
+                ItemType.SERIES, TmdbClient.SOURCE, currentUser.id());
+        Set<String> excluded = baseExclusions(series);
+        return seriesEnriched(switch (deckId) {
+            case LATEST_DECK_ID -> new SuggestionDeck(deckId, SERIES_LATEST_TITLE,
+                    fill((page, floor) -> tmdb.nowPlaying(TmdbMedia.TV, page), refresh, excluded, NO_FLOORS));
+            case "completed" -> new SuggestionDeck(deckId, COMPLETED_TITLE,
+                    seriesStatusDeck(series, ItemStatus.COMPLETED, excluded));
+            case "pending" -> new SuggestionDeck(deckId, PENDING_TITLE,
+                    seriesStatusDeck(series, ItemStatus.PENDING, excluded));
+            default -> seriesBrowsableDeck(deckId, refresh, excluded);
+        });
+    }
+
+    public List<Suggestion> similarSeries(String externalId) {
+        List<Item> series = items.findByTypeAndSourceAndUserIdAndDeletedAtIsNull(
+                ItemType.SERIES, TmdbClient.SOURCE, currentUser.id());
+        Map<String, Suggestion> byId = new LinkedHashMap<>();
+        Map<String, Integer> hits = new HashMap<>();
+        collect(tmdb.recommendations(TmdbMedia.TV, externalId), byId, hits, baseExclusions(series));
+        return tmdb.enrich(TmdbMedia.TV, top(byId, s -> hits.get(s.externalId()), DECK_SIZE));
+    }
+
+    private SuggestionDeck seriesBrowsableDeck(String deckId, boolean refresh, Set<String> excluded) {
+        if (deckId.startsWith(GENRE_PREFIX)) {
+            int genreId = idIn(deckId, GENRE_PREFIX);
+            return new SuggestionDeck(deckId, capitalize(seriesGenreName(genreId)),
+                    fill((page, floor) -> tmdb.discoverByGenre(TmdbMedia.TV, genreId, page, floor),
+                            refresh, excluded, VOTE_FLOORS));
+        }
+        if (deckId.startsWith(DECADE_PREFIX)) {
+            int startYear = idIn(deckId, DECADE_PREFIX);
+            return new SuggestionDeck(deckId, decadeName(startYear),
+                    fill((page, floor) -> tmdb.discoverByDecade(TmdbMedia.TV, startYear, page, floor),
+                            refresh, excluded, VOTE_FLOORS));
+        }
+        throw new IllegalArgumentException("Unknown deck id: " + deckId);
+    }
+
+    private List<Suggestion> seriesStatusDeck(List<Item> series, ItemStatus status, Set<String> excluded) {
+        List<Item> seeds = new ArrayList<>(series.stream()
+                .filter(i -> i.getStatus() == status && i.getExternalId() != null)
+                .toList());
+        Collections.shuffle(seeds);
+
+        Map<String, Suggestion> byId = new LinkedHashMap<>();
+        Map<String, Integer> hits = new HashMap<>();
+        for (Item seed : seeds.subList(0, Math.min(SEEDS_PER_DECK, seeds.size()))) {
+            collect(tmdb.recommendations(TmdbMedia.TV, seed.getExternalId()), byId, hits, excluded);
+        }
+        return top(byId, s -> hits.get(s.externalId()), DECK_SIZE);
+    }
+
+    private List<SuggestionGenre> seriesGenreFacets() {
+        return tmdb.genreIdsByName(TmdbMedia.TV).entrySet().stream()
+                .map(entry -> new SuggestionGenre(GENRE_PREFIX + entry.getValue(),
+                        capitalize(entry.getKey()), GENRE_GROUP))
+                .sorted(Comparator.comparing(SuggestionGenre::name))
+                .toList();
+    }
+
+    private String seriesGenreName(int genreId) {
+        return tmdb.genreIdsByName(TmdbMedia.TV).entrySet().stream()
+                .filter(entry -> entry.getValue() == genreId)
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Unknown genre id: " + genreId));
+    }
+
+    private SuggestionDeck seriesEnriched(SuggestionDeck deck) {
+        return new SuggestionDeck(deck.id(), deck.title(), tmdb.enrich(TmdbMedia.TV, deck.suggestions()));
+    }
+
+    private List<SuggestionDeck> seriesEnriched(List<SuggestionDeck> decks) {
+        List<Suggestion> all = tmdb.enrich(TmdbMedia.TV, decks.stream()
+                .flatMap(deck -> deck.suggestions().stream())
+                .toList());
+        List<SuggestionDeck> result = new ArrayList<>(decks.size());
+        int from = 0;
+        for (SuggestionDeck deck : decks) {
+            int to = from + deck.suggestions().size();
+            result.add(new SuggestionDeck(deck.id(), deck.title(), List.copyOf(all.subList(from, to))));
+            from = to;
+        }
+        return result;
     }
 
     @FunctionalInterface

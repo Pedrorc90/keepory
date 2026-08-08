@@ -46,6 +46,27 @@ public class SuggestionController {
         return service.movieDeck(deckId, refresh);
     }
 
+    @GetMapping("/series")
+    public List<SuggestionDeck> series() {
+        return service.seriesDecks();
+    }
+
+    @GetMapping("/series/genres")
+    public List<SuggestionGenre> seriesGenres() {
+        return service.seriesGenres();
+    }
+
+    @GetMapping("/series/similar/{externalId}")
+    public List<Suggestion> similarSeries(@PathVariable String externalId) {
+        return service.similarSeries(externalId);
+    }
+
+    @GetMapping("/series/{deckId}")
+    public SuggestionDeck seriesDeck(@PathVariable String deckId,
+                                     @RequestParam(defaultValue = "false") boolean refresh) {
+        return service.seriesDeck(deckId, refresh);
+    }
+
     @GetMapping("/books")
     public List<Suggestion> books() {
         return service.books();

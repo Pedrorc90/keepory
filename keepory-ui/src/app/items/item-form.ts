@@ -45,7 +45,7 @@ import { MetadataSearchResult } from './metadata.model';
           <div class="grid max-w-3xl content-start gap-4">
             <div class="grid gap-1.5 text-sm">
               <span class="text-muted">Tipo</span>
-              <div class="grid grid-cols-2 gap-3">
+              <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 @for (t of types; track t) {
                   <label class="cursor-pointer">
                     <input type="radio" formControlName="type" [value]="t" class="peer sr-only" />
@@ -56,6 +56,11 @@ import { MetadataSearchResult } from './metadata.model';
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-6 w-6 shrink-0 text-rust" aria-hidden="true">
                           <rect x="3" y="4" width="18" height="16" rx="2" />
                           <path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4" />
+                        </svg>
+                      } @else if (t === 'SERIES') {
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-6 w-6 shrink-0 text-dusk" aria-hidden="true">
+                          <rect x="2" y="7" width="20" height="14" rx="2" />
+                          <path d="m7 2 5 5 5-5" />
                         </svg>
                       } @else {
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-6 w-6 shrink-0 text-moss" aria-hidden="true">
@@ -342,13 +347,20 @@ import { MetadataSearchResult } from './metadata.model';
           </p>
         } @else if (similar(); as suggestions) {
           <section class="mt-10 border-t border-line pt-6">
-            <h2 class="font-display text-xl font-semibold">Más películas como esta</h2>
+            <h2 class="font-display text-xl font-semibold">
+              {{ currentType() === 'SERIES' ? 'Más series como esta' : 'Más películas como esta' }}
+            </h2>
             <app-suggestion-row
               class="mt-3 block"
               [suggestions]="suggestions"
-              [type]="'MOVIE'"
+              [type]="currentType()"
               completedLabel="Vista"
-              duplicateMessage="Esta película ya está en tu colección."
+              [inProgressLabel]="currentType() === 'SERIES' ? 'Viendo' : null"
+              [duplicateMessage]="
+                currentType() === 'SERIES'
+                  ? 'Esta serie ya está en tu colección.'
+                  : 'Esta película ya está en tu colección.'
+              "
               [reloadable]="false"
             />
           </section>
@@ -423,7 +435,7 @@ export class ItemForm {
       const allowed = this.collectionOptions().map((c) => c.id);
       this.selectedCollections.update((ids) => ids.filter((id) => allowed.includes(id)));
       this.rebuildAttrs();
-      this.providerLogos.set(type === 'MOVIE' ? providerBadges(this.attributes['watchProviders']) : null);
+      this.providerLogos.set(type === 'BOOK' ? null : providerBadges(this.attributes['watchProviders']));
     });
     if (this.id) this.loadItem(this.id);
   }
@@ -449,8 +461,8 @@ export class ItemForm {
         this.currentType.set(item.type);
         this.rebuildAttrs();
         this.providerLogos.set(providerBadges(this.attributes['watchProviders']));
-        // Only TMDB movies have recommendations to show.
-        if (item.type === 'MOVIE' && item.source === 'TMDB' && item.externalId) {
+        // Only TMDB titles have recommendations to show.
+        if (item.type !== 'BOOK' && item.source === 'TMDB' && item.externalId) {
           this.loadSimilar();
         }
       },
@@ -465,7 +477,11 @@ export class ItemForm {
   private loadSimilar(): void {
     if (!this.externalId) return;
     this.similarError.set(null);
-    this.suggestions.similarMovies(this.externalId).subscribe({
+    const similar$ =
+      this.currentType() === 'SERIES'
+        ? this.suggestions.similarSeries(this.externalId)
+        : this.suggestions.similarMovies(this.externalId);
+    similar$.subscribe({
       next: (results) => this.similar.set(results),
       error: () => this.similarError.set('No se pudieron cargar las sugerencias similares.'),
     });
@@ -620,7 +636,8 @@ export class ItemForm {
 
   /** Back to the shelf the item belongs to: there is no mixed list to return to. */
   private shelfFor(type: ItemType | null | undefined): string {
-    return type === 'BOOK' ? '/books' : '/movies';
+    if (type === 'BOOK') return '/books';
+    return type === 'SERIES' ? '/series' : '/movies';
   }
 
   cancel(): void {

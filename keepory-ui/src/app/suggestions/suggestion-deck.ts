@@ -143,7 +143,7 @@ interface DeckCard {
         </article>
       </div>
 
-      <div class="mt-4 flex items-stretch justify-center gap-2">
+      <div class="mt-4 flex flex-wrap items-stretch justify-center gap-2">
         <button
           type="button"
           (click)="swipe('left')"
@@ -159,6 +159,15 @@ interface DeckCard {
         >
           ↑ Pendiente
         </button>
+        @if (inProgressLabel(); as label) {
+          <button
+            type="button"
+            (click)="markInProgress()"
+            class="flex-1 rounded-md border border-dusk/80 px-2 py-2 text-xs text-dusk transition hover:bg-dusk hover:text-ink"
+          >
+            {{ label }}
+          </button>
+        }
         <button
           type="button"
           (click)="swipe('right')"
@@ -202,6 +211,8 @@ export class SuggestionDeckView {
   readonly sections = input.required<SuggestionDeck[]>();
   readonly type = input.required<ItemType>();
   readonly completedLabel = input.required<string>();
+  /** Null on shelves where "in progress" means nothing worth a button. */
+  readonly inProgressLabel = input<string | null>(null);
   readonly duplicateMessage = input.required<string>();
   readonly refreshing = input(false);
   readonly reload = output<void>();
@@ -346,7 +357,7 @@ export class SuggestionDeckView {
 
   // The card leaves right away and the request rides along: on a phone the
   // gesture has to feel instant, and a failure only costs a notice.
-  private commit(direction: SwipeDirection): void {
+  private commit(direction: SwipeDirection, status?: ItemStatus): void {
     const card = this.current();
     if (!card) {
       return;
@@ -356,8 +367,18 @@ export class SuggestionDeckView {
     if (direction === 'left') {
       this.suggestionApi.dismiss(card.suggestion).subscribe({ error: () => {} });
     } else {
-      this.add(card.suggestion, direction === 'right' ? 'COMPLETED' : 'PENDING');
+      this.add(card.suggestion, status ?? (direction === 'right' ? 'COMPLETED' : 'PENDING'));
     }
+  }
+
+  // The only action without a gesture of its own: the card leaves upwards like
+  // Pendiente does, since both mean "this one is not finished".
+  markInProgress(): void {
+    if (this.flying()) {
+      return;
+    }
+    this.release.set({ x: 0, y: 0 });
+    this.commit('up', 'IN_PROGRESS');
   }
 
   private add(suggestion: Suggestion, status: ItemStatus): void {

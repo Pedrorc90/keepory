@@ -13,6 +13,8 @@ const DESKTOP_QUERY = '(min-width: 768px)';
 interface SuggestionTexts {
   tagline: string;
   completed: string;
+  /** Only the shelves you work through episode by episode offer it. */
+  inProgress?: string;
   duplicate: string;
   emptyHint: string;
   loadError: string;
@@ -97,6 +99,7 @@ interface SuggestionTexts {
                   [suggestions]="section.suggestions"
                   [type]="type()"
                   [completedLabel]="labels().completed"
+                  [inProgressLabel]="labels().inProgress ?? null"
                   [duplicateMessage]="labels().duplicate"
                   [refreshing]="refreshingId() === section.id"
                   (reload)="refreshSection(section.id)"
@@ -110,6 +113,7 @@ interface SuggestionTexts {
             [sections]="sections()"
             [type]="type()"
             [completedLabel]="labels().completed"
+            [inProgressLabel]="labels().inProgress ?? null"
             [duplicateMessage]="labels().duplicate"
             [refreshing]="loading()"
             (reload)="load()"
@@ -138,15 +142,23 @@ export class Suggestions {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
-  readonly types: ItemType[] = ['MOVIE', 'BOOK'];
-  readonly typeTabs: Record<ItemType, string> = { MOVIE: 'Películas', BOOK: 'Libros' };
-  private readonly typePaths: Record<ItemType, string> = { MOVIE: 'movies', BOOK: 'books' };
+  readonly types: ItemType[] = ['MOVIE', 'SERIES', 'BOOK'];
+  readonly typeTabs: Record<ItemType, string> = { MOVIE: 'Películas', SERIES: 'Series', BOOK: 'Libros' };
+  private readonly typePaths: Record<ItemType, string> = { MOVIE: 'movies', SERIES: 'series', BOOK: 'books' };
   private readonly texts: Record<ItemType, SuggestionTexts> = {
     MOVIE: {
       tagline: 'Novedades y filas según lo que has visto y tus pendientes. Filtra por género.',
       completed: 'Vista',
       duplicate: 'Esta película ya está en tu colección.',
       emptyHint: 'Añade películas completadas o pendientes para afinar las sugerencias.',
+      loadError: 'No se pudieron cargar las sugerencias. ¿Está configurada la key de TMDB?',
+    },
+    SERIES: {
+      tagline: 'Series afines a lo que ya has visto. Filtra por género.',
+      completed: 'Vista',
+      inProgress: 'Viendo',
+      duplicate: 'Esta serie ya está en tu colección.',
+      emptyHint: 'Añade series completadas o pendientes para afinar las sugerencias.',
       loadError: 'No se pudieron cargar las sugerencias. ¿Está configurada la key de TMDB?',
     },
     BOOK: {
@@ -166,9 +178,19 @@ export class Suggestions {
   readonly labels = computed(() => this.texts[this.type()]);
   readonly sections = signal<SuggestionDeck[]>([]);
   private readonly movieChips = signal<SuggestionGenre[]>([]);
+  private readonly seriesChips = signal<SuggestionGenre[]>([]);
   private readonly bookChips = signal<SuggestionGenre[]>([]);
-  /** Both shelves browse by genre, each with its own chips. */
-  readonly genres = computed(() => (this.type() === 'BOOK' ? this.bookChips() : this.movieChips()));
+  /** Every shelf browses by genre, each with its own chips. */
+  readonly genres = computed(() => {
+    switch (this.type()) {
+      case 'SERIES':
+        return this.seriesChips();
+      case 'BOOK':
+        return this.bookChips();
+      default:
+        return this.movieChips();
+    }
+  });
   /** One chip row per axis, in the order the backend sends them. */
   readonly genreGroups = computed(() => {
     const groups = new Map<string, SuggestionGenre[]>();
@@ -253,6 +275,11 @@ export class Suggestions {
               ),
             );
     }
+    if (this.type() === 'SERIES') {
+      return genre
+        ? this.suggestionApi.seriesDeck(genre).pipe(oneDeck)
+        : this.suggestionApi.seriesDecks();
+    }
     return genre
       ? this.suggestionApi.movieDeck(genre).pipe(oneDeck)
       : this.suggestionApi.movieDecks();
@@ -267,9 +294,11 @@ export class Suggestions {
     const deck$ =
       this.type() === 'MOVIE'
         ? this.suggestionApi.movieDeck(id, true)
-        : this.genre()
-          ? this.suggestionApi.bookDeck(id)
-          : this.suggestionApi.books().pipe(map((suggestions) => this.bookSection(suggestions)));
+        : this.type() === 'SERIES'
+          ? this.suggestionApi.seriesDeck(id, true)
+          : this.genre()
+            ? this.suggestionApi.bookDeck(id)
+            : this.suggestionApi.books().pipe(map((suggestions) => this.bookSection(suggestions)));
     deck$.subscribe({
       next: (deck) => {
         this.sections.update((sections) => sections.map((s) => (s.id === id ? deck : s)));
@@ -287,6 +316,10 @@ export class Suggestions {
     this.suggestionApi.movieGenres().subscribe({
       next: (genres) => this.movieChips.set(genres),
       error: () => this.movieChips.set([]),
+    });
+    this.suggestionApi.seriesGenres().subscribe({
+      next: (genres) => this.seriesChips.set(genres),
+      error: () => this.seriesChips.set([]),
     });
     this.suggestionApi.bookGenres().subscribe({
       next: (genres) => this.bookChips.set(genres),

@@ -23,14 +23,16 @@ public class MetadataService {
             return List.of();
         }
         return switch (type) {
-            case MOVIE -> tmdb.search(query.trim());
+            case MOVIE -> tmdb.search(TmdbMedia.MOVIE, query.trim());
+            case SERIES -> tmdb.search(TmdbMedia.TV, query.trim());
             case BOOK -> googleBooks.search(query.trim());
         };
     }
 
     public MetadataDetail detail(ItemType type, String externalId) {
         return switch (type) {
-            case MOVIE -> tmdb.detail(externalId);
+            case MOVIE -> tmdb.detail(TmdbMedia.MOVIE, externalId);
+            case SERIES -> tmdb.detail(TmdbMedia.TV, externalId);
             case BOOK -> googleBooks.detail(externalId);
         };
     }

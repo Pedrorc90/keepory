@@ -113,6 +113,16 @@ interface PendingDismissal {
               >
                 Pendiente
               </button>
+              @if (inProgressLabel(); as label) {
+                <button
+                  type="button"
+                  (click)="add(s, 'IN_PROGRESS')"
+                  [disabled]="busy()"
+                  class="flex-1 rounded-md border border-dusk/80 px-1 py-1 text-xs text-dusk transition enabled:hover:bg-dusk enabled:hover:text-ink disabled:opacity-60"
+                >
+                  {{ label }}
+                </button>
+              }
               <button
                 type="button"
                 (click)="add(s, 'COMPLETED')"
@@ -160,6 +170,8 @@ export class SuggestionRow implements OnDestroy {
   readonly suggestions = input.required<Suggestion[]>();
   readonly type = input.required<ItemType>();
   readonly completedLabel = input.required<string>();
+  /** Null on shelves where "in progress" means nothing worth a button. */
+  readonly inProgressLabel = input<string | null>(null);
   readonly duplicateMessage = input.required<string>();
   readonly refreshing = input(false);
   /** The row offers a "more suggestions" tile unless the caller opts out. */

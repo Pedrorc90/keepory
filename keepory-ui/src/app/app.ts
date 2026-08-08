@@ -34,6 +34,7 @@ export class App {
   readonly user = this.auth.user;
 
   readonly movieCollections = computed(() => this.collections.forType('MOVIE'));
+  readonly seriesCollections = computed(() => this.collections.forType('SERIES'));
   readonly bookCollections = computed(() => this.collections.forType('BOOK'));
 
   // Long shelves are revealed 5 at a time instead of all at once.
@@ -214,8 +215,16 @@ export class App {
   }
 
   private routeForType(type: ItemType | null): string {
-    if (type === 'MOVIE') return '/movies';
-    return type === 'BOOK' ? '/books' : '/';
+    switch (type) {
+      case 'MOVIE':
+        return '/movies';
+      case 'SERIES':
+        return '/series';
+      case 'BOOK':
+        return '/books';
+      default:
+        return '/';
+    }
   }
 
   /** A collection only takes items of its own type. */

@@ -1,5 +1,6 @@
 package com.keepory.metadata;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.keepory.metadata.dto.MetadataDetail;
 import com.keepory.metadata.dto.MetadataSearchResult;
@@ -45,15 +46,15 @@ public class TmdbClient {
     // after deck, so a long-lived cache keeps enrichment down to a few calls.
     private static final long EXTRAS_TTL_MS = Duration.ofHours(12).toMillis();
     private static final int EXTRAS_CACHE_MAX = 2000;
-    private static final MovieExtras NO_EXTRAS = new MovieExtras(List.of(), null);
+    private static final TitleExtras NO_EXTRAS = new TitleExtras(List.of(), null);
     // Detail calls in flight at once. All 45 of a cold desktop load would sit on
     // TMDB's rate limit; 30 keeps the pipeline full without courting a 429.
     private static final int MAX_IN_FLIGHT = 30;
 
     private final RestClient client;
     private final String apiKey;
-    // TMDB's genre catalog is static; fetched once per app run.
-    private volatile Map<String, Integer> genreIdsByName;
+    // TMDB's genre catalogs are static; each is fetched once per app run.
+    private final Map<TmdbMedia, Map<String, Integer>> genreIds = new ConcurrentHashMap<>();
     private final Map<String, CacheEntry> extrasCache = new ConcurrentHashMap<>();
     private final Semaphore inFlight = new Semaphore(MAX_IN_FLIGHT);
 
@@ -62,8 +63,8 @@ public class TmdbClient {
         this.apiKey = apiKey;
     }
 
-    public List<MetadataSearchResult> search(String query) {
-        SearchResponse response = get(uri -> uri.path("/search/movie")
+    public List<MetadataSearchResult> search(TmdbMedia media, String query) {
+        SearchResponse response = get(uri -> uri.path("/search" + media.path())
                 .queryParam("query", query)
                 .queryParam("language", LANGUAGE)
                 .queryParam("api_key", apiKey)
@@ -78,16 +79,25 @@ public class TmdbClient {
                 .toList();
     }
 
-    public MetadataDetail detail(String externalId) {
-        MovieDetail m = get(uri -> uri.path("/movie/{id}")
+    public MetadataDetail detail(TmdbMedia media, String externalId) {
+        TitleDetail m = get(uri -> uri.path(media.path() + "/{id}")
                 .queryParam("language", LANGUAGE)
                 .queryParam("append_to_response", "credits,watch/providers")
                 .queryParam("api_key", apiKey)
-                .build(externalId), MovieDetail.class);
+                .build(externalId), TitleDetail.class);
 
         Map<String, Object> attributes = new LinkedHashMap<>();
-        put(attributes, "director", director(m.credits()));
-        put(attributes, "durationMinutes", m.runtime());
+        if (media == TmdbMedia.TV) {
+            put(attributes, "creator", creators(m.createdBy()));
+            put(attributes, "seasons", m.numberOfSeasons());
+            put(attributes, "episodes", m.numberOfEpisodes());
+            // Per episode, not per series: a run time for the whole thing would
+            // be a number nobody thinks in.
+            put(attributes, "durationMinutes", episodeRuntime(m.episodeRunTime()));
+        } else {
+            put(attributes, "director", director(m.credits()));
+            put(attributes, "durationMinutes", m.runtime());
+        }
         if (m.genres() != null && !m.genres().isEmpty()) {
             attributes.put("genres", m.genres().stream().map(Genre::name).toList());
         }
@@ -104,30 +114,30 @@ public class TmdbClient {
                 cover(m.posterPath()), attributes);
     }
 
-    public List<Suggestion> recommendations(String externalId) {
-        return suggestions(get(uri -> uri.path("/movie/{id}/recommendations")
+    public List<Suggestion> recommendations(TmdbMedia media, String externalId) {
+        return suggestions(get(uri -> uri.path(media.path() + "/{id}/recommendations")
                 .queryParam("language", LANGUAGE)
                 .queryParam("api_key", apiKey)
-                .build(externalId), MovieListResponse.class));
+                .build(externalId), TitleListResponse.class));
     }
 
-    public SuggestionPage discoverByGenre(int genreId, int page, int voteFloor) {
-        return discover(uri -> uri.queryParam("with_genres", genreId), page, voteFloor);
+    public SuggestionPage discoverByGenre(TmdbMedia media, int genreId, int page, int voteFloor) {
+        return discover(media, uri -> uri.queryParam("with_genres", genreId), page, voteFloor);
     }
 
     /** Everything released in the ten years starting at {@code startYear}. */
-    public SuggestionPage discoverByDecade(int startYear, int page, int voteFloor) {
-        return discover(uri -> uri
-                .queryParam("primary_release_date.gte", startYear + "-01-01")
-                .queryParam("primary_release_date.lte", (startYear + 9) + "-12-31"), page, voteFloor);
+    public SuggestionPage discoverByDecade(TmdbMedia media, int startYear, int page, int voteFloor) {
+        return discover(media, uri -> uri
+                .queryParam(media.dateFilter() + ".gte", startYear + "-01-01")
+                .queryParam(media.dateFilter() + ".lte", (startYear + 9) + "-12-31"), page, voteFloor);
     }
 
     // Popularity alone surfaces obscure catalog noise, so callers start with a
     // vote floor; a floor of 0 means they ran out of well-voted titles and will
     // take anything rather than show an empty row.
-    private SuggestionPage discover(UnaryOperator<UriBuilder> filter, int page, int voteFloor) {
+    private SuggestionPage discover(TmdbMedia media, UnaryOperator<UriBuilder> filter, int page, int voteFloor) {
         return page(get(uri -> {
-            UriBuilder builder = filter.apply(uri.path("/discover/movie"));
+            UriBuilder builder = filter.apply(uri.path("/discover" + media.path()));
             if (voteFloor > 0) {
                 builder = builder.queryParam("vote_count.gte", voteFloor);
             }
@@ -137,33 +147,38 @@ public class TmdbClient {
                     .queryParam("language", LANGUAGE)
                     .queryParam("api_key", apiKey)
                     .build();
-        }, MovieListResponse.class));
+        }, TitleListResponse.class));
     }
 
-    // Released in the last weeks in Spain; the shelf's "what's new" row.
-    public SuggestionPage nowPlaying(int page) {
-        return page(get(uri -> uri.path("/movie/now_playing")
-                .queryParam("region", WATCH_REGION)
-                .queryParam("page", page)
-                .queryParam("language", LANGUAGE)
-                .queryParam("api_key", apiKey)
-                .build(), MovieListResponse.class));
+    // In cinemas in Spain, or airing this week; the shelf's "what's new" row.
+    public SuggestionPage nowPlaying(TmdbMedia media, int page) {
+        return page(get(uri -> {
+            UriBuilder builder = uri.path(media.newReleases());
+            if (media.regional()) {
+                builder = builder.queryParam("region", WATCH_REGION);
+            }
+            return builder
+                    .queryParam("page", page)
+                    .queryParam("language", LANGUAGE)
+                    .queryParam("api_key", apiKey)
+                    .build();
+        }, TitleListResponse.class));
     }
 
     // The listing endpoints know nothing about providers or videos, so each
     // suggestion needs its own detail call. They run on virtual threads: a deck
     // costs one round trip in wall-clock rather than fifteen.
-    public List<Suggestion> enrich(List<Suggestion> suggestions) {
+    public List<Suggestion> enrich(TmdbMedia media, List<Suggestion> suggestions) {
         if (suggestions.isEmpty()) {
             return suggestions;
         }
         try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            List<Future<MovieExtras>> pending = suggestions.stream()
-                    .map(s -> executor.submit(() -> throttled(s.externalId())))
+            List<Future<TitleExtras>> pending = suggestions.stream()
+                    .map(s -> executor.submit(() -> throttled(media, s.externalId())))
                     .toList();
             List<Suggestion> enriched = new ArrayList<>(suggestions.size());
             for (int i = 0; i < suggestions.size(); i++) {
-                MovieExtras extras = await(pending.get(i));
+                TitleExtras extras = await(pending.get(i));
                 enriched.add(suggestions.get(i).withExtras(extras.providers(), extras.trailerKey()));
             }
             return enriched;
@@ -171,16 +186,16 @@ public class TmdbClient {
     }
 
     // A cache hit still takes a permit, but it releases it without a round trip.
-    private MovieExtras throttled(String externalId) throws InterruptedException {
+    private TitleExtras throttled(TmdbMedia media, String externalId) throws InterruptedException {
         inFlight.acquire();
         try {
-            return extras(externalId);
+            return extras(media, externalId);
         } finally {
             inFlight.release();
         }
     }
 
-    private static MovieExtras await(Future<MovieExtras> future) {
+    private static TitleExtras await(Future<TitleExtras> future) {
         try {
             return future.get();
         } catch (InterruptedException ex) {
@@ -191,26 +206,28 @@ public class TmdbClient {
         }
     }
 
-    private MovieExtras extras(String externalId) {
+    private TitleExtras extras(TmdbMedia media, String externalId) {
         long now = System.currentTimeMillis();
-        CacheEntry cached = extrasCache.get(externalId);
+        // A film and a series can share an id, so the catalog is part of the key.
+        String key = media.path() + externalId;
+        CacheEntry cached = extrasCache.get(key);
         if (cached != null && cached.expiresAt() > now) {
             return cached.extras();
         }
-        MovieExtras extras;
+        TitleExtras extras;
         try {
-            MovieDetail m = get(uri -> uri.path("/movie/{id}")
+            TitleDetail m = get(uri -> uri.path(media.path() + "/{id}")
                     .queryParam("language", LANGUAGE)
                     .queryParam("append_to_response", "videos,watch/providers")
                     // Spanish trailers are the exception, so accept the English
                     // and untagged ones rather than come back empty.
                     .queryParam("include_video_language", "es,en,null")
                     .queryParam("api_key", apiKey)
-                    .build(externalId), MovieDetail.class);
+                    .build(externalId), TitleDetail.class);
             if (m == null) {
                 return NO_EXTRAS;
             }
-            extras = new MovieExtras(flatrateProviders(m.watchProviders()), trailerKey(m.videos()));
+            extras = new TitleExtras(flatrateProviders(m.watchProviders()), trailerKey(m.videos()));
         } catch (MetadataProviderException ex) {
             // A card without a badge beats a deck that fails to load.
             return NO_EXTRAS;
@@ -218,7 +235,7 @@ public class TmdbClient {
         if (extrasCache.size() >= EXTRAS_CACHE_MAX) {
             extrasCache.values().removeIf(entry -> entry.expiresAt() <= now);
         }
-        extrasCache.put(externalId, new CacheEntry(extras, now + EXTRAS_TTL_MS));
+        extrasCache.put(key, new CacheEntry(extras, now + EXTRAS_TTL_MS));
         return extras;
     }
 
@@ -246,29 +263,26 @@ public class TmdbClient {
         return rank;
     }
 
-    public Map<String, Integer> genreIdsByName() {
-        Map<String, Integer> cached = genreIdsByName;
-        if (cached == null) {
-            GenreListResponse response = get(uri -> uri.path("/genre/movie/list")
+    public Map<String, Integer> genreIdsByName(TmdbMedia media) {
+        return genreIds.computeIfAbsent(media, m -> {
+            GenreListResponse response = get(uri -> uri.path("/genre" + m.path() + "/list")
                     .queryParam("language", LANGUAGE)
                     .queryParam("api_key", apiKey)
                     .build(), GenreListResponse.class);
-            cached = response == null || response.genres() == null ? Map.of()
+            return response == null || response.genres() == null ? Map.of()
                     : response.genres().stream().collect(Collectors.toUnmodifiableMap(
                             g -> g.name().toLowerCase(Locale.ROOT), Genre::id, (a, b) -> a));
-            genreIdsByName = cached;
-        }
-        return cached;
+        });
     }
 
-    private static SuggestionPage page(MovieListResponse response) {
+    private static SuggestionPage page(TitleListResponse response) {
         if (response == null || response.results() == null) {
             return new SuggestionPage(List.of(), 0);
         }
         return new SuggestionPage(suggestions(response), Math.min(response.totalPages(), MAX_PAGE));
     }
 
-    private static List<Suggestion> suggestions(MovieListResponse response) {
+    private static List<Suggestion> suggestions(TitleListResponse response) {
         if (response == null || response.results() == null) {
             return List.of();
         }
@@ -299,6 +313,27 @@ public class TmdbClient {
                 .map(CrewMember::name)
                 .collect(Collectors.joining(", "));
         return directors.isEmpty() ? null : directors;
+    }
+
+    // A series has no director; the credited creators play that part.
+    private static String creators(List<CreatedBy> createdBy) {
+        if (createdBy == null || createdBy.isEmpty()) {
+            return null;
+        }
+        String names = createdBy.stream()
+                .map(CreatedBy::name)
+                .filter(Objects::nonNull)
+                .collect(Collectors.joining(", "));
+        return names.isEmpty() ? null : names;
+    }
+
+    // TMDB gives a run time per episode length the series has used; the first
+    // one is the usual length.
+    private static Integer episodeRuntime(List<Integer> runtimes) {
+        if (runtimes == null || runtimes.isEmpty()) {
+            return null;
+        }
+        return runtimes.getFirst();
     }
 
     private static List<String> flatrateProviders(WatchProviders watchProviders) {
@@ -348,32 +383,38 @@ public class TmdbClient {
         }
     }
 
-    private record SearchResponse(List<MovieResult> results) {
+    private record SearchResponse(List<TitleResult> results) {
     }
 
-    private record MovieResult(long id,
-                               String title,
-                               @JsonProperty("release_date") String releaseDate,
+    // The /tv payloads are the /movie ones with three fields renamed, so the
+    // aliases let one record read both catalogs.
+    private record TitleResult(long id,
+                               @JsonAlias("name") String title,
+                               @JsonProperty("release_date") @JsonAlias("first_air_date") String releaseDate,
                                @JsonProperty("poster_path") String posterPath,
                                String overview) {
     }
 
-    private record MovieDetail(long id,
-                               String title,
-                               @JsonProperty("original_title") String originalTitle,
-                               @JsonProperty("release_date") String releaseDate,
+    private record TitleDetail(long id,
+                               @JsonAlias("name") String title,
+                               @JsonProperty("original_title") @JsonAlias("original_name") String originalTitle,
+                               @JsonProperty("release_date") @JsonAlias("first_air_date") String releaseDate,
                                @JsonProperty("poster_path") String posterPath,
                                Integer runtime,
+                               @JsonProperty("episode_run_time") List<Integer> episodeRunTime,
+                               @JsonProperty("number_of_seasons") Integer numberOfSeasons,
+                               @JsonProperty("number_of_episodes") Integer numberOfEpisodes,
+                               @JsonProperty("created_by") List<CreatedBy> createdBy,
                                List<Genre> genres,
                                Credits credits,
                                Videos videos,
                                @JsonProperty("watch/providers") WatchProviders watchProviders) {
     }
 
-    private record MovieExtras(List<String> providers, String trailerKey) {
+    private record TitleExtras(List<String> providers, String trailerKey) {
     }
 
-    private record CacheEntry(MovieExtras extras, long expiresAt) {
+    private record CacheEntry(TitleExtras extras, long expiresAt) {
     }
 
     private record Videos(List<Video> results) {
@@ -395,13 +436,13 @@ public class TmdbClient {
     private record Provider(@JsonProperty("provider_name") String providerName) {
     }
 
-    private record MovieListResponse(List<ListedMovie> results,
+    private record TitleListResponse(List<ListedTitle> results,
                                      @JsonProperty("total_pages") int totalPages) {
     }
 
-    private record ListedMovie(long id,
-                               String title,
-                               @JsonProperty("release_date") String releaseDate,
+    private record ListedTitle(long id,
+                               @JsonAlias("name") String title,
+                               @JsonProperty("release_date") @JsonAlias("first_air_date") String releaseDate,
                                @JsonProperty("poster_path") String posterPath,
                                String overview,
                                @JsonProperty("vote_average") Double voteAverage) {
@@ -417,5 +458,8 @@ public class TmdbClient {
     }
 
     private record CrewMember(String name, String job) {
+    }
+
+    private record CreatedBy(String name) {
     }
 }

@@ -1,4 +1,4 @@
-export type ItemType = 'MOVIE' | 'BOOK';
+export type ItemType = 'MOVIE' | 'SERIES' | 'BOOK';
 
 export type ItemStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'DROPPED';
 
@@ -42,6 +42,7 @@ export interface Page<T> {
 
 export const TYPE_LABELS: Record<ItemType, string> = {
   MOVIE: 'Película',
+  SERIES: 'Serie',
   BOOK: 'Libro',
 };
 
@@ -69,6 +70,16 @@ export const ATTRIBUTE_FIELDS: Record<ItemType, AttributeField[]> = {
   MOVIE: [
     { key: 'year', label: 'Año', kind: 'number' },
     { key: 'durationMinutes', label: 'Duración (min)', kind: 'number' },
+    { key: 'genres', label: 'Géneros (separados por comas)', kind: 'list' },
+    { key: 'watchProviders', label: 'Dónde ver (separadas por comas)', kind: 'list' },
+    { key: 'originalTitle', label: 'Título original', kind: 'text' },
+  ],
+  SERIES: [
+    { key: 'creator', label: 'Creador', kind: 'text' },
+    { key: 'year', label: 'Año de estreno', kind: 'number' },
+    { key: 'seasons', label: 'Temporadas', kind: 'number' },
+    { key: 'episodes', label: 'Episodios', kind: 'number' },
+    { key: 'durationMinutes', label: 'Duración por episodio (min)', kind: 'number' },
     { key: 'genres', label: 'Géneros (separados por comas)', kind: 'list' },
     { key: 'watchProviders', label: 'Dónde ver (separadas por comas)', kind: 'list' },
     { key: 'originalTitle', label: 'Título original', kind: 'text' },
