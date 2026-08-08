@@ -98,7 +98,7 @@ import { MetadataSearchResult } from './metadata.model';
                 <input
                   [formControl]="searchControl"
                   (keydown.enter)="$event.preventDefault(); search()"
-                  placeholder="Busca en TMDB / Google Books…"
+                  placeholder="Busca en TMDB / Google Books / RAWG…"
                   class="min-w-0 flex-1 rounded-md border border-line bg-panel px-3 py-2 placeholder:text-muted focus:border-amber focus:outline-none"
                 />
                 <button
@@ -435,7 +435,10 @@ export class ItemForm {
       const allowed = this.collectionOptions().map((c) => c.id);
       this.selectedCollections.update((ids) => ids.filter((id) => allowed.includes(id)));
       this.rebuildAttrs();
-      this.providerLogos.set(type === 'BOOK' ? null : providerBadges(this.attributes['watchProviders']));
+      // Only the TMDB shelves carry streaming badges.
+      this.providerLogos.set(
+        type === 'BOOK' || type === 'GAME' ? null : providerBadges(this.attributes['watchProviders']),
+      );
     });
     if (this.id) this.loadItem(this.id);
   }
@@ -637,6 +640,7 @@ export class ItemForm {
   /** Back to the shelf the item belongs to: there is no mixed list to return to. */
   private shelfFor(type: ItemType | null | undefined): string {
     if (type === 'BOOK') return '/books';
+    if (type === 'GAME') return '/games';
     return type === 'SERIES' ? '/series' : '/movies';
   }
 

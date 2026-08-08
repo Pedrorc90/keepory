@@ -142,9 +142,19 @@ export class Suggestions {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
-  readonly types: ItemType[] = ['MOVIE', 'SERIES', 'BOOK'];
-  readonly typeTabs: Record<ItemType, string> = { MOVIE: 'Películas', SERIES: 'Series', BOOK: 'Libros' };
-  private readonly typePaths: Record<ItemType, string> = { MOVIE: 'movies', SERIES: 'series', BOOK: 'books' };
+  readonly types: ItemType[] = ['MOVIE', 'SERIES', 'BOOK', 'GAME'];
+  readonly typeTabs: Record<ItemType, string> = {
+    MOVIE: 'Películas',
+    SERIES: 'Series',
+    BOOK: 'Libros',
+    GAME: 'Juegos',
+  };
+  private readonly typePaths: Record<ItemType, string> = {
+    MOVIE: 'movies',
+    SERIES: 'series',
+    BOOK: 'books',
+    GAME: 'games',
+  };
   private readonly texts: Record<ItemType, SuggestionTexts> = {
     MOVIE: {
       tagline: 'Novedades y filas según lo que has visto y tus pendientes. Filtra por género.',
@@ -168,6 +178,14 @@ export class Suggestions {
       emptyHint: 'Marca libros como completados para afinar las sugerencias.',
       loadError: 'No se pudieron cargar las sugerencias. ¿Está configurada la key de Google Books?',
     },
+    GAME: {
+      tagline: 'Novedades y juegos de los géneros que más juegas. Filtra por género.',
+      completed: 'Jugado',
+      inProgress: 'Jugando',
+      duplicate: 'Este juego ya está en tu colección.',
+      emptyHint: 'Añade juegos completados o pendientes para afinar las sugerencias.',
+      loadError: 'No se pudieron cargar las sugerencias. ¿Está configurada la key de RAWG?',
+    },
   };
 
   readonly activeChip = 'rounded-full border border-amber bg-amber/15 px-3 py-1 text-xs text-paper';
@@ -180,6 +198,7 @@ export class Suggestions {
   private readonly movieChips = signal<SuggestionGenre[]>([]);
   private readonly seriesChips = signal<SuggestionGenre[]>([]);
   private readonly bookChips = signal<SuggestionGenre[]>([]);
+  private readonly gameChips = signal<SuggestionGenre[]>([]);
   /** Every shelf browses by genre, each with its own chips. */
   readonly genres = computed(() => {
     switch (this.type()) {
@@ -187,6 +206,8 @@ export class Suggestions {
         return this.seriesChips();
       case 'BOOK':
         return this.bookChips();
+      case 'GAME':
+        return this.gameChips();
       default:
         return this.movieChips();
     }
@@ -280,6 +301,9 @@ export class Suggestions {
         ? this.suggestionApi.seriesDeck(genre).pipe(oneDeck)
         : this.suggestionApi.seriesDecks();
     }
+    if (this.type() === 'GAME') {
+      return genre ? this.suggestionApi.gameDeck(genre).pipe(oneDeck) : this.suggestionApi.gameDecks();
+    }
     return genre
       ? this.suggestionApi.movieDeck(genre).pipe(oneDeck)
       : this.suggestionApi.movieDecks();
@@ -291,15 +315,7 @@ export class Suggestions {
     }
     this.refreshingId.set(id);
     this.refreshError.set(null);
-    const deck$ =
-      this.type() === 'MOVIE'
-        ? this.suggestionApi.movieDeck(id, true)
-        : this.type() === 'SERIES'
-          ? this.suggestionApi.seriesDeck(id, true)
-          : this.genre()
-            ? this.suggestionApi.bookDeck(id)
-            : this.suggestionApi.books().pipe(map((suggestions) => this.bookSection(suggestions)));
-    deck$.subscribe({
+    this.refreshedDeck$(id).subscribe({
       next: (deck) => {
         this.sections.update((sections) => sections.map((s) => (s.id === id ? deck : s)));
         this.refreshingId.set(null);
@@ -309,6 +325,22 @@ export class Suggestions {
         this.refreshingId.set(null);
       },
     });
+  }
+
+  /** The same row, one page further in; books have a single page to serve. */
+  private refreshedDeck$(id: string): Observable<SuggestionDeck> {
+    switch (this.type()) {
+      case 'MOVIE':
+        return this.suggestionApi.movieDeck(id, true);
+      case 'SERIES':
+        return this.suggestionApi.seriesDeck(id, true);
+      case 'GAME':
+        return this.suggestionApi.gameDeck(id, true);
+      default:
+        return this.genre()
+          ? this.suggestionApi.bookDeck(id)
+          : this.suggestionApi.books().pipe(map((suggestions) => this.bookSection(suggestions)));
+    }
   }
 
   // Without the provider key these fail; the chips just stay hidden.
@@ -324,6 +356,10 @@ export class Suggestions {
     this.suggestionApi.bookGenres().subscribe({
       next: (genres) => this.bookChips.set(genres),
       error: () => this.bookChips.set([]),
+    });
+    this.suggestionApi.gameGenres().subscribe({
+      next: (genres) => this.gameChips.set(genres),
+      error: () => this.gameChips.set([]),
     });
   }
 

@@ -7,6 +7,7 @@ import com.keepory.item.ItemStatus;
 import com.keepory.item.ItemType;
 import com.keepory.metadata.GoogleBooksClient;
 import com.keepory.metadata.MetadataProviderException;
+import com.keepory.metadata.RawgClient;
 import com.keepory.metadata.TmdbClient;
 import com.keepory.metadata.TmdbMedia;
 import com.keepory.suggestion.dto.Suggestion;
@@ -51,12 +52,17 @@ public class SuggestionService {
     private static final int[] VOTE_FLOORS = {200, 50, 10, 0};
     // now_playing takes no vote filter, so relaxing it would just refetch page 1.
     private static final int[] NO_FLOORS = {0};
+    // RAWG scores on Metacritic, and only a slice of the catalog carries one, so
+    // the floors drop to nothing faster than the TMDB vote counts do.
+    private static final int[] METACRITIC_FLOORS = {80, 70, 0};
     private static final int OLDEST_DECADE = 1990;
     private static final String LATEST_DECK_ID = "latest";
     private static final String LATEST_TITLE = "Novedades en cartelera";
     private static final String SERIES_LATEST_TITLE = "Novedades en emisión";
     private static final String COMPLETED_TITLE = "Afines a tus vistas";
     private static final String PENDING_TITLE = "Afines a tus pendientes";
+    private static final String GAME_LATEST_TITLE = "Novedades del catálogo";
+    private static final String PLAYED_TITLE = "Afines a tus jugados";
     private static final String GENRE_PREFIX = "genre-";
     private static final String DECADE_PREFIX = "decade-";
     private static final String GENRE_GROUP = "Géneros";
@@ -66,14 +72,17 @@ public class SuggestionService {
     private final SuggestionDismissalRepository dismissals;
     private final TmdbClient tmdb;
     private final GoogleBooksClient googleBooks;
+    private final RawgClient rawg;
     private final CurrentUser currentUser;
 
     public SuggestionService(ItemRepository items, SuggestionDismissalRepository dismissals,
-                             TmdbClient tmdb, GoogleBooksClient googleBooks, CurrentUser currentUser) {
+                             TmdbClient tmdb, GoogleBooksClient googleBooks, RawgClient rawg,
+                             CurrentUser currentUser) {
         this.items = items;
         this.dismissals = dismissals;
         this.tmdb = tmdb;
         this.googleBooks = googleBooks;
+        this.rawg = rawg;
         this.currentUser = currentUser;
     }
 
@@ -198,8 +207,13 @@ public class SuggestionService {
     }
 
     private Set<String> baseExclusions(List<Item> movies) {
-        Set<String> excluded = new HashSet<>(dismissed(TmdbClient.SOURCE));
-        movies.stream().map(Item::getExternalId).filter(Objects::nonNull).forEach(excluded::add);
+        return baseExclusions(movies, TmdbClient.SOURCE);
+    }
+
+    // What is already on the shelf, plus what was dismissed from this provider.
+    private Set<String> baseExclusions(List<Item> owned, String source) {
+        Set<String> excluded = new HashSet<>(dismissed(source));
+        owned.stream().map(Item::getExternalId).filter(Objects::nonNull).forEach(excluded::add);
         return excluded;
     }
 
@@ -341,6 +355,104 @@ public class SuggestionService {
             from = to;
         }
         return result;
+    }
+
+    // Games reuse the fill() machinery, but RAWG keeps its recommendations
+    // endpoint behind the business plan: the affinity rows re-query the genres
+    // the shelf already leans on, the way the book rows re-query authors.
+    // Nothing here is enriched — RAWG has no streaming providers or trailers.
+
+    public List<SuggestionDeck> gameDecks() {
+        List<Item> games = ownedGames();
+        Set<String> excluded = baseExclusions(games, RawgClient.SOURCE);
+
+        List<SuggestionDeck> decks = new ArrayList<>();
+        addDeck(decks, excluded, LATEST_DECK_ID, GAME_LATEST_TITLE,
+                fill((page, floor) -> rawg.latest(page), false, excluded, NO_FLOORS));
+        addDeck(decks, excluded, "completed", PLAYED_TITLE,
+                gameStatusDeck(games, ItemStatus.COMPLETED, excluded));
+        addDeck(decks, excluded, "pending", PENDING_TITLE,
+                gameStatusDeck(games, ItemStatus.PENDING, excluded));
+        return decks;
+    }
+
+    /** The game chips: RAWG's genre catalog, translated, plus the decades. */
+    public List<SuggestionGenre> gameGenres() {
+        List<SuggestionGenre> facets = new ArrayList<>(rawg.genreNamesById().entrySet().stream()
+                .map(entry -> new SuggestionGenre(GENRE_PREFIX + entry.getKey(), entry.getValue(), GENRE_GROUP))
+                .sorted(Comparator.comparing(SuggestionGenre::name))
+                .toList());
+        facets.addAll(decadeFacets());
+        return facets;
+    }
+
+    public SuggestionDeck gameDeck(String deckId, boolean refresh) {
+        List<Item> games = ownedGames();
+        Set<String> excluded = baseExclusions(games, RawgClient.SOURCE);
+        return switch (deckId) {
+            case LATEST_DECK_ID -> new SuggestionDeck(deckId, GAME_LATEST_TITLE,
+                    fill((page, floor) -> rawg.latest(page), refresh, excluded, NO_FLOORS));
+            case "completed" -> new SuggestionDeck(deckId, PLAYED_TITLE,
+                    gameStatusDeck(games, ItemStatus.COMPLETED, excluded));
+            case "pending" -> new SuggestionDeck(deckId, PENDING_TITLE,
+                    gameStatusDeck(games, ItemStatus.PENDING, excluded));
+            default -> gameBrowsableDeck(deckId, refresh, excluded);
+        };
+    }
+
+    private List<Item> ownedGames() {
+        return items.findByTypeAndSourceAndUserIdAndDeletedAtIsNull(
+                ItemType.GAME, RawgClient.SOURCE, currentUser.id());
+    }
+
+    private SuggestionDeck gameBrowsableDeck(String deckId, boolean refresh, Set<String> excluded) {
+        if (deckId.startsWith(GENRE_PREFIX)) {
+            int genreId = idIn(deckId, GENRE_PREFIX);
+            return new SuggestionDeck(deckId, gameGenreName(genreId),
+                    fill((page, floor) -> rawg.discoverByGenre(genreId, page, floor),
+                            refresh, excluded, METACRITIC_FLOORS));
+        }
+        if (deckId.startsWith(DECADE_PREFIX)) {
+            int startYear = idIn(deckId, DECADE_PREFIX);
+            return new SuggestionDeck(deckId, decadeName(startYear),
+                    fill((page, floor) -> rawg.discoverByDecade(startYear, page, floor),
+                            refresh, excluded, METACRITIC_FLOORS));
+        }
+        throw new IllegalArgumentException("Unknown deck id: " + deckId);
+    }
+
+    private String gameGenreName(int genreId) {
+        String name = rawg.genreNamesById().get(genreId);
+        if (name == null) {
+            throw new IllegalArgumentException("Unknown genre id: " + genreId);
+        }
+        return name;
+    }
+
+    private List<Suggestion> gameStatusDeck(List<Item> games, ItemStatus status, Set<String> excluded) {
+        List<Integer> genreIds = seedGenreIds(games, status);
+        if (genreIds.isEmpty()) {
+            return List.of();
+        }
+        return fill((page, floor) -> rawg.discoverByGenres(genreIds, page, floor),
+                false, excluded, METACRITIC_FLOORS);
+    }
+
+    // The genres the shelf leans on hardest for a status, most played first.
+    // RAWG treats a multi-genre filter as an OR, so three is already a wide net.
+    private List<Integer> seedGenreIds(List<Item> games, ItemStatus status) {
+        Map<String, Integer> idsByName = rawg.genreIdsByName();
+        Map<Integer, Long> counts = games.stream()
+                .filter(i -> i.getStatus() == status)
+                .flatMap(i -> strings(i.getAttributes().get("genres")).stream())
+                .map(name -> idsByName.get(name.toLowerCase(Locale.ROOT)))
+                .filter(Objects::nonNull)
+                .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
+        return counts.entrySet().stream()
+                .sorted(Map.Entry.<Integer, Long>comparingByValue(Comparator.reverseOrder()))
+                .limit(SEEDS_PER_DECK)
+                .map(Map.Entry::getKey)
+                .toList();
     }
 
     @FunctionalInterface

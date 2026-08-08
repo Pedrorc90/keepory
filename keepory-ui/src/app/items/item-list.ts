@@ -295,6 +295,16 @@ type ShelfView = 'collections' | 'items' | 'all';
                     <svg class="absolute right-2 top-0 h-10 w-4 text-moss drop-shadow-md" viewBox="0 0 16 40" aria-hidden="true">
                       <path d="M0 0h16v40l-8-7-8 7z" fill="currentColor" />
                     </svg>
+                  } @else if (item.type === 'GAME') {
+                    <svg class="absolute right-2 top-0 h-10 w-4 text-plum drop-shadow-md" viewBox="0 0 16 40" aria-hidden="true">
+                      <rect width="16" height="40" fill="currentColor" />
+                      <g fill="rgba(0, 0, 0, 0.45)">
+                        <rect x="4" y="16" width="8" height="2.2" rx="1.1" />
+                        <rect x="6.9" y="13.1" width="2.2" height="8" rx="1.1" />
+                        <circle cx="6" cy="27" r="1.6" />
+                        <circle cx="10" cy="27" r="1.6" />
+                      </g>
+                    </svg>
                   }
                 </div>
               </a>
@@ -454,6 +464,8 @@ export class ItemList {
         return 'Series';
       case 'BOOK':
         return 'Books';
+      case 'GAME':
+        return 'Games';
       default:
         return '';
     }
@@ -465,6 +477,8 @@ export class ItemList {
         return '/suggestions/series';
       case 'BOOK':
         return '/suggestions/books';
+      case 'GAME':
+        return '/suggestions/games';
       default:
         return '/suggestions/movies';
     }
@@ -489,6 +503,8 @@ export class ItemList {
         return 'Series';
       case 'BOOK':
         return 'Libros';
+      case 'GAME':
+        return 'Juegos';
       default:
         return 'Sueltos';
     }

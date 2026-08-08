@@ -11,6 +11,8 @@
   --color-rust: #c4605d;
   /* Series: the cold glow of a screen in a room lit by everything else warm. */
   --color-dusk: #7f8fb0;
+  /* Games: the one shelf that gets a light of its own. */
+  --color-plum: #9b7cb8;
 
   --font-display: "Fraunces", Georgia, "Times New Roman", serif;
   --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;

@@ -299,6 +299,48 @@
             />
             <ng-container [ngTemplateOutlet]="newCollection" [ngTemplateOutletContext]="{ $implicit: 'BOOK' }" />
           }
+          <div class="flex shrink-0 items-center gap-1">
+            <a
+              routerLink="/games"
+              routerLinkActive="!border-plum/60 !bg-plum/10 !text-paper"
+              [routerLinkActiveOptions]="exactMatch"
+              class="group flex flex-1 shrink-0 items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 text-sm text-muted transition hover:bg-paper/5 hover:text-paper"
+            >
+              <svg class="h-4 w-4 text-plum" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path
+                  d="M5 3.5h6a3.5 3.5 0 0 1 3.45 2.9l.5 3A3.1 3.1 0 0 1 12.9 13c-.9 0-1.74-.45-2.24-1.2l-.5-.75h-4.3l-.5.75C4.85 12.55 4 13 3.1 13A3.1 3.1 0 0 1 .05 9.4l.5-3A3.5 3.5 0 0 1 4 3.5z"
+                />
+                <g fill="rgba(0, 0, 0, 0.45)">
+                  <rect x="3" y="7" width="3" height="1.1" rx="0.55" />
+                  <rect x="3.95" y="6.05" width="1.1" height="3" rx="0.55" />
+                  <circle cx="11" cy="7" r="0.8" />
+                  <circle cx="12.6" cy="8.6" r="0.8" />
+                </g>
+              </svg>
+              Juegos
+            </a>
+            <ng-container
+              [ngTemplateOutlet]="sectionToggle"
+              [ngTemplateOutletContext]="{ $implicit: 'GAME', label: 'juegos', count: gameCollections().length }"
+            />
+          </div>
+          @if (sectionOpen('GAME')) {
+            @for (collection of visibleCollections(gameCollections(), 'GAME'); track collection.id) {
+              <ng-container
+                [ngTemplateOutlet]="collectionRow"
+                [ngTemplateOutletContext]="{
+                  $implicit: collection,
+                  link: '/games',
+                  active: '!border-plum/50 !bg-plum/10 !text-paper'
+                }"
+              />
+            }
+            <ng-container
+              [ngTemplateOutlet]="showMoreTpl"
+              [ngTemplateOutletContext]="{ $implicit: 'GAME', total: gameCollections().length }"
+            />
+            <ng-container [ngTemplateOutlet]="newCollection" [ngTemplateOutletContext]="{ $implicit: 'GAME' }" />
+          }
         </nav>
         @if (dropError()) {
           <p class="mt-2 px-3 pb-1 text-xs text-rust">{{ dropError() }}</p>
@@ -323,7 +365,9 @@
       </a>
       <p>
         This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability data provided by
-        JustWatch. Book covers courtesy of Open Library.
+        JustWatch. Book covers courtesy of Open Library. Game data and images from
+        <!-- RAWG's terms ask for a live link on every page that shows their data. -->
+        <a href="https://rawg.io" target="_blank" rel="noopener" class="underline hover:text-paper">RAWG</a>.
       </p>
       <a routerLink="/privacidad" class="shrink-0 hover:text-paper hover:underline">Privacidad</a>
     </div>

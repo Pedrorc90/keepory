@@ -90,6 +90,20 @@ export class SuggestionApi {
     return this.http.get<SuggestionDeck>(`${this.baseUrl}/books/${id}`);
   }
 
+  gameDecks(): Observable<SuggestionDeck[]> {
+    return this.http.get<SuggestionDeck[]>(`${this.baseUrl}/games`);
+  }
+
+  gameGenres(): Observable<SuggestionGenre[]> {
+    return this.http.get<SuggestionGenre[]>(`${this.baseUrl}/games/genres`);
+  }
+
+  gameDeck(id: string, refresh = false): Observable<SuggestionDeck> {
+    return this.http.get<SuggestionDeck>(`${this.baseUrl}/games/${id}`, {
+      params: refresh ? { refresh: true } : {},
+    });
+  }
+
   dismiss(suggestion: Suggestion): Observable<void> {
     return this.http.post<void>(`${this.baseUrl}/dismiss`, {
       source: suggestion.source,

@@ -36,6 +36,7 @@ export class App {
   readonly movieCollections = computed(() => this.collections.forType('MOVIE'));
   readonly seriesCollections = computed(() => this.collections.forType('SERIES'));
   readonly bookCollections = computed(() => this.collections.forType('BOOK'));
+  readonly gameCollections = computed(() => this.collections.forType('GAME'));
 
   // Long shelves are revealed 5 at a time instead of all at once.
   private readonly PAGE_SIZE = 5;
@@ -222,6 +223,8 @@ export class App {
         return '/series';
       case 'BOOK':
         return '/books';
+      case 'GAME':
+        return '/games';
       default:
         return '/';
     }

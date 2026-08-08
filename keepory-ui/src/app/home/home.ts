@@ -16,7 +16,7 @@ import { CollectionApi } from '../collections/collection-api';
         ¿Qué estantería abres hoy<span class="text-amber">?</span>
       </h1>
 
-      <div class="mt-8 grid gap-4 sm:mt-10 sm:grid-cols-3 sm:gap-6">
+      <div class="mt-8 grid gap-4 sm:mt-10 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4">
         <a
           routerLink="/movies"
           class="group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-panel/50 p-6 transition hover:border-rust/60 hover:bg-panel focus-visible:border-rust/60 focus-visible:outline-none sm:p-8"
@@ -101,6 +101,38 @@ import { CollectionApi } from '../collections/collection-api';
             Abrir →
           </span>
         </a>
+
+        <a
+          routerLink="/games"
+          class="group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-panel/50 p-6 transition hover:border-plum/60 hover:bg-panel focus-visible:border-plum/60 focus-visible:outline-none sm:p-8"
+        >
+          <span
+            class="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-plum/10 blur-2xl transition-opacity duration-300 group-hover:opacity-100 sm:opacity-0"
+          ></span>
+          <svg
+            class="h-10 w-10 text-plum transition-transform duration-300 group-hover:-translate-y-0.5 sm:h-12 sm:w-12"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              d="M5 3.5h6a3.5 3.5 0 0 1 3.45 2.9l.5 3A3.1 3.1 0 0 1 12.9 13c-.9 0-1.74-.45-2.24-1.2l-.5-.75h-4.3l-.5.75C4.85 12.55 4 13 3.1 13A3.1 3.1 0 0 1 .05 9.4l.5-3A3.5 3.5 0 0 1 4 3.5z"
+            />
+            <g fill="rgba(0, 0, 0, 0.45)">
+              <rect x="3" y="7" width="3" height="1.1" rx="0.55" />
+              <rect x="3.95" y="6.05" width="1.1" height="3" rx="0.55" />
+              <circle cx="11" cy="7" r="0.8" />
+              <circle cx="12.6" cy="8.6" r="0.8" />
+            </g>
+          </svg>
+          <h2 class="mt-5 font-display text-2xl font-semibold tracking-tight sm:mt-6 sm:text-3xl">
+            Juegos
+          </h2>
+          <p class="mt-1.5 text-sm text-muted">{{ label(gameCount()) }}</p>
+          <span class="mt-6 text-sm text-plum opacity-0 transition-opacity group-hover:opacity-100">
+            Abrir →
+          </span>
+        </a>
       </div>
 
       <a
@@ -119,6 +151,7 @@ export class Home {
   readonly movieCount = computed(() => this.collections.forType('MOVIE').length);
   readonly seriesCount = computed(() => this.collections.forType('SERIES').length);
   readonly bookCount = computed(() => this.collections.forType('BOOK').length);
+  readonly gameCount = computed(() => this.collections.forType('GAME').length);
 
   greeting(): string {
     const name = this.auth.user()?.displayName?.trim();

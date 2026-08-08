@@ -82,6 +82,22 @@ public class SuggestionController {
         return service.bookDeck(deckId);
     }
 
+    @GetMapping("/games")
+    public List<SuggestionDeck> games() {
+        return service.gameDecks();
+    }
+
+    @GetMapping("/games/genres")
+    public List<SuggestionGenre> gameGenres() {
+        return service.gameGenres();
+    }
+
+    @GetMapping("/games/{deckId}")
+    public SuggestionDeck gameDeck(@PathVariable String deckId,
+                                   @RequestParam(defaultValue = "false") boolean refresh) {
+        return service.gameDeck(deckId, refresh);
+    }
+
     @PostMapping("/dismiss")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void dismiss(@RequestBody DismissRequest request) {

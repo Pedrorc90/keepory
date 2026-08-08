@@ -31,6 +31,8 @@ keepory:
     api-key: ${TMDB_API_KEY:}
   google-books:
     api-key: ${GOOGLE_BOOKS_API_KEY:}
+  rawg:
+    api-key: ${RAWG_API_KEY:}
   admin:
     email: ${KEEPORY_ADMIN_EMAIL:}
     password: ${KEEPORY_ADMIN_PASSWORD:}

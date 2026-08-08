@@ -1,4 +1,4 @@
-export type ItemType = 'MOVIE' | 'SERIES' | 'BOOK';
+export type ItemType = 'MOVIE' | 'SERIES' | 'BOOK' | 'GAME';
 
 export type ItemStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'DROPPED';
 
@@ -44,6 +44,7 @@ export const TYPE_LABELS: Record<ItemType, string> = {
   MOVIE: 'Película',
   SERIES: 'Serie',
   BOOK: 'Libro',
+  GAME: 'Juego',
 };
 
 export const STATUS_LABELS: Record<ItemStatus, string> = {
@@ -91,6 +92,16 @@ export const ATTRIBUTE_FIELDS: Record<ItemType, AttributeField[]> = {
     { key: 'publisher', label: 'Editorial', kind: 'text' },
     { key: 'isbn', label: 'ISBN', kind: 'text' },
     { key: 'categories', label: 'Categorías (separadas por comas)', kind: 'list' },
+  ],
+  GAME: [
+    { key: 'year', label: 'Año', kind: 'number' },
+    { key: 'platforms', label: 'Plataformas (separadas por comas)', kind: 'list' },
+    { key: 'genres', label: 'Géneros (separados por comas)', kind: 'list' },
+    { key: 'developer', label: 'Desarrollador', kind: 'text' },
+    { key: 'publisher', label: 'Distribuidora', kind: 'text' },
+    { key: 'metacritic', label: 'Metacritic', kind: 'number' },
+    { key: 'playtimeHours', label: 'Duración media (h)', kind: 'number' },
+    { key: 'esrb', label: 'Clasificación por edad', kind: 'text' },
   ],
 };
 
